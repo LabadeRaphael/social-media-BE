@@ -1,13 +1,13 @@
 import { UsersService } from './users.service';
 import { UsersDto } from './users.dto';
 /* eslint-disable prettier/prettier */
-import { Controller, Get, Post, Body } from "@nestjs/common";
+import { Controller, Get, Post, Body, ValidationPipe } from "@nestjs/common";
 
 @Controller("users")
 export class UsersController {
     constructor(private userService:UsersService){}
     @Post("/signup")
-    createUser(@Body() user: UsersDto) {
+    createUser(@Body(new ValidationPipe()) user: UsersDto) {
         return this.userService.create(user)
     }
     @Get("/login")
