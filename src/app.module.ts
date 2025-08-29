@@ -7,9 +7,11 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthorizeGuard } from './auth/guards/authorize.guard';
+import { ConfigModule } from '@nestjs/config';
+import databaseConfig from './config/database.config';
 
 @Module({
-  imports: [UsersModule, PrismaModule, AuthModule],
+  imports: [UsersModule, PrismaModule, AuthModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig]})],
   controllers: [AppController],
   providers: [
     AppService,
