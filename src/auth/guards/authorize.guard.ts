@@ -9,7 +9,7 @@ export class AuthorizeGuard implements CanActivate {
   ): boolean | Promise<boolean> | Observable<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-
+    
     if (!user) {
       return false; // reject if no user
     }

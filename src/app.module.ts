@@ -9,9 +9,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthorizeGuard } from './auth/guards/authorize.guard';
 import { ConfigModule } from '@nestjs/config';
 import databaseConfig from './config/database.config';
-
+import { envValidator } from './config/env.validation';
 @Module({
-  imports: [UsersModule, PrismaModule, AuthModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig]})],
+  imports: [UsersModule, PrismaModule, AuthModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig], validationSchema: envValidator})],
   controllers: [AppController],
   providers: [
     AppService,

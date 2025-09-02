@@ -37,7 +37,7 @@ export default tseslint.config(
       'no-console': 'off',
 
       // ✅ Let Prettier handle formatting only
-      'prettier/prettier': 'warn',
+      'prettier/prettier': 'off',
 
       // '@typescript-eslint/no-explicit-any': 'off',
       // '@typescript-eslint/no-floating-promises': 'warn',
