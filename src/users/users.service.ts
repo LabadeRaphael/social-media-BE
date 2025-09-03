@@ -26,13 +26,13 @@ export class UsersService {
       const createUser = await this.prisma.user.create({
         data: {
           email: user.email,
-          username: user.username,
+          username: user.userName,
           password: hashedPassword
         },
         select: {
           id: true,
           email: true,
-          username: true
+          userName: true
         }
       });
       return createUser;
@@ -41,6 +41,9 @@ export class UsersService {
     }
   }
   async login(login: LoginDto){
-    
+    const { email }  = login
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
   }
 }

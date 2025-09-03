@@ -1,20 +1,30 @@
 import { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import { Reflector } from '@nestjs/core';
 
 @Injectable()
 export class AuthorizeGuard implements CanActivate {
-  canActivate(
+  constructor(private readonly reflector: Reflector) { }
+ async canActivate(
     context: ExecutionContext
-  ): boolean | Promise<boolean> | Observable<boolean> {
+  ):  Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride('isPublic',[
+      context.getHandler(),
+      context.getClass(),
+    ])
+    if (isPublic) {
+      return true
+    }
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    
+
     if (!user) {
       return false; // reject if no user
     }
 
     // you can add custom logic e.g. check roles
     return true;
+    
+    
   }
 }
