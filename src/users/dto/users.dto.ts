@@ -1,6 +1,7 @@
 import { IsEmail, IsString, IsNotEmpty, MinLength } from 'class-validator';
 
 export class UsersDto {
+  @IsNotEmpty({ message: 'Email is required' })
   @IsString({ message: 'Email must be a string value.' })
   @IsEmail()
   email: string;

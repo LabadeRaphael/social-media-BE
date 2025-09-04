@@ -5,8 +5,9 @@ export default registerAs('auth', () => ({
   jwtExpiration: process.env.JWT_EXPIRATION,
   refreshSecret: process.env.JWT_REFRESH_SECRET,
   refreshExpiration: process.env.JWT_REFRESH_EXPIRATION,
-  audience: process.env.JWT_TOKEN_AUDIENCE,
-  issuer: process.env.JWT_TOKEN_ISSUER,
+  resetPswExpiration: process.env.JWT_RESETPSW_EXPIRATION,
+  audience: process.env.JWT_TOKEN_AUDIENCE || 'nestfinity',
+  issuer: process.env.JWT_TOKEN_ISSUER || 'nestfinity',
 }));
 
 

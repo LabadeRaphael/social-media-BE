@@ -1,4 +1,4 @@
 export interface ActiveUserType {
-    sub:number,
-    email:string
+    sub: string,
+    email: string
 }
