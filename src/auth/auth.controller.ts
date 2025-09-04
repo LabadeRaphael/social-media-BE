@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { UsersDto } from 'src/users/dto/users.dto';
 import { LoginDto } from './dto/login.dto';
 import { AllowAnonymous } from 'src/decorators/public.decorator';
+import { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -18,12 +19,11 @@ export class AuthController {
   @Post('login')
   async login(@Body(new ValidationPipe()) login: LoginDto, @Res({passthrough:true}) res: Response) {
     const token = await this.authService.login(login);
-     // 👇 set cookie
-    res.cookie('jwt', token, {
-      httpOnly: true,   // can’t be accessed via JS (protects against XSS)
-      secure: process.env.NODE_ENV === 'production', // only https in prod
-      sameSite: 'strict', // CSRF protection
-      maxAge: 1000 * 60 * 60, // cookie expiration (1h)
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 1000 * 60 * 60,
     });
     return { message: 'Login successful' };
   }
