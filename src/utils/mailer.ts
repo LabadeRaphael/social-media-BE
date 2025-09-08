@@ -15,7 +15,7 @@ const sendResetPasswordEmail = (to: string, token: string) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
   const mailOptions = {
-    from: `"Nestfinity Support" <${process.env.SMTP_USER}>`,
+    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
     to,
     subject: 'Password Reset Request',
     html: `
@@ -25,7 +25,7 @@ const sendResetPasswordEmail = (to: string, token: string) => {
         <p style="color: #fdf8f4;">Click the button below to reset it:</p>
         <a href="${resetUrl}" style="
           display: inline-block;
-          background-color: #fdf8f4;
+          background-color: #ffc244;
           color: #1a1a1a;
           padding: 10px 20px;
           text-decoration: none;
