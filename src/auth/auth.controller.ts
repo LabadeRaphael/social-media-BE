@@ -34,12 +34,14 @@ export class AuthController {
   @AllowAnonymous()
   @Post('forgot-password')
   async forgotPassword (@Body(new ValidationPipe()) forgotPsw:ForgotPswDto){
-    return this.authService.forgotPassword(forgotPsw);
+    await this.authService.forgotPassword(forgotPsw);
+    return { message: 'If your email is registered, you will receive a reset link shortly.', status: true };
   }
   
-   @AllowAnonymous()
-   @Post('reset-password')
+  @AllowAnonymous()
+  @Post('reset-password')
   async resetPassword(@Body(new ValidationPipe()) resetPsw: ResetPasswordDto) {
-    return this.authService.resetPassword(resetPsw);
+    await this.authService.resetPassword(resetPsw);
+    return { message: 'Password reset successfully', status:true };
   }
 }

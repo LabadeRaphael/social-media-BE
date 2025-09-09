@@ -10,11 +10,11 @@ const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [ConfigModule.forFeature(authConfig)],
   inject: [authConfig.KEY],
   useFactory: (config: ConfigType<typeof authConfig>) => ({
-    secret: config.jwtSecret,
+    secret: config.jwtAccessSecret,
     signOptions: {
-      expiresIn: config.jwtExpiration,
-      audience: config.audience,
-      issuer: config.issuer,
+      expiresIn: config.jwtAccessExpiration,
+      audience: config.jwtAudience,
+      issuer: config.jwtIssuer,
     },
   }),
 });

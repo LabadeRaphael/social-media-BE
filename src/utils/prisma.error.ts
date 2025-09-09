@@ -3,7 +3,8 @@ import { log } from 'node:console';
 import {
   ConflictException,
   InternalServerErrorException,
-  RequestTimeoutException
+  RequestTimeoutException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 
 export const handlePrismaError = (error: any): never => {
@@ -16,6 +17,9 @@ export const handlePrismaError = (error: any): never => {
     const field = error.meta?.target?.[0] ?? 'field';
     console.log(`${field} already exists`);
     throw new ConflictException(`${field} already exists`);
+  }
+   if (error.code === 'P1001') {
+    throw new ServiceUnavailableException('Database connection failed. Please try again later.');
   }
 
   console.error('Unhandled Prisma Error:', error);

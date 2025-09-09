@@ -1,6 +1,8 @@
+import { log } from 'node:console';
 import { User } from './../../generated/prisma/index.d';
 
 import {
+  BadRequestException,
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,7 +16,7 @@ import { ResetPasswordDto } from 'src/auth/dto/reset-psw.dto';
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
   async register(user: UsersDto) {
     try {
       const hashedPassword = await bcrypt.hash(user.password, 10);
@@ -32,33 +34,38 @@ export class UsersService {
         }
       });
       if (!createUser) {
-        return {message: 'Signup failed', status:false}
+        return { message: 'Signup failed', status: false }
       }
 
-      return {message: 'Signup successful', status:true};
+      return { message: 'Signup successful', status: true };
     } catch (error: any) {
       handlePrismaError(error);
     }
   }
-  async login(login: LoginDto){
-    const { email }  = login
+  async login(login: LoginDto) {
+    const { email } = login
     return this.prisma.user.findUnique({
       where: { email },
     });
   }
-  async findByEmail(forgotPsw: ForgotPswDto){
-    const { email }= forgotPsw
+  async findByEmail(forgotPsw: ForgotPswDto) {
+    const { email } = forgotPsw
     return this.prisma.user.findUnique({
       where: { email },
     });
   }
-  async updatePassword(resetPsw: ResetPasswordDto) {
-    const { email, newPassword } = resetPsw
-    // newPassword=has
+  async updatePassword(userId: string, newPassword: string) {
+    
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     return this.prisma.user.update({
-      where: { email },
+      where: { id: userId },
       data: { password: hashedPassword },
     });
+    
   }
+  async findById(userId: string) {
+  return this.prisma.user.findUnique({
+    where: { id: userId },
+  });
+}
 }
