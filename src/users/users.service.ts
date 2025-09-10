@@ -1,17 +1,15 @@
-import { log } from 'node:console';
-import { User } from './../../generated/prisma/index.d';
-
+// import { User,} from './../../generated/prisma/index.d';
 import {
-  BadRequestException,
   Injectable,
 } from '@nestjs/common';
+import { User, RefreshToken } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersDto } from './dto/users.dto';
 import { handlePrismaError } from './../utils/prisma.error';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
-import { ResetPasswordDto } from 'src/auth/dto/reset-psw.dto';
+import { LogoutDto } from 'src/auth/dto/logout.dto';
 @Injectable()
 export class UsersService {
   constructor(
@@ -48,6 +46,15 @@ export class UsersService {
       where: { email },
     });
   }
+  async saveRefreshToken(userId: string, token: string, expiresAt: Date){
+     return this.prisma.refreshToken.create({
+      data: {
+        userId,
+        token,
+        expiresAt
+      },
+    });
+  }
   async findByEmail(forgotPsw: ForgotPswDto) {
     const { email } = forgotPsw
     return this.prisma.user.findUnique({
@@ -55,17 +62,29 @@ export class UsersService {
     });
   }
   async updatePassword(userId: string, newPassword: string) {
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     return this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
-    
+
   }
   async findById(userId: string) {
-  return this.prisma.user.findUnique({
-    where: { id: userId },
-  });
-}
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+  }
+  async deleteAllRefreshTokens(userId: string) {
+    return this.prisma.refreshToken.deleteMany({
+      where: { userId },
+    });
+  }
+  async logout(logout:LogoutDto) {
+    const { refreshToken } = logout
+    await this.prisma.refreshToken.delete({
+      where: { refreshToken },
+    });
+  }
 }

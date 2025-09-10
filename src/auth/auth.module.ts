@@ -6,6 +6,7 @@ import { ConfigModule, ConfigType } from '@nestjs/config';
 import authConfig from 'src/config/auth.config';
 // import { JwtModule } from '@nestjs/jwt';
 import { JwtModule, JwtModuleAsyncOptions } from '@nestjs/jwt';
+import { CookiesService } from './cookies.service';
 const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [ConfigModule.forFeature(authConfig)],
   inject: [authConfig.KEY],
@@ -24,7 +25,7 @@ const jwtProvider = (): JwtModuleAsyncOptions => ({
     JwtModule.registerAsync(jwtProvider())
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, CookiesService],
   exports: [AuthService, JwtModule]
 })
 export class AuthModule {}

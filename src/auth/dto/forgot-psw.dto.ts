@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from "class-validator";
+import { IsEmail, IsNotEmpty} from "class-validator";
 
 export class ForgotPswDto {
     @IsNotEmpty({ message: 'Email is required' })

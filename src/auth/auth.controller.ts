@@ -6,11 +6,15 @@ import { AllowAnonymous } from 'src/decorators/public.decorator';
 import { Response } from 'express';
 import { ForgotPswDto } from './dto/forgot-psw.dto';
 import { ResetPasswordDto } from './dto/reset-psw.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { CookiesService } from './cookies.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+     private readonly cookieService: CookiesService,
   ) {}
   @AllowAnonymous()
   @Post('signup')
@@ -20,13 +24,21 @@ export class AuthController {
   @AllowAnonymous()
   @Post('login')
   async login(@Body(new ValidationPipe()) login: LoginDto, @Res({passthrough:true}) res: Response) {
-    const token = await this.authService.login(login);
-    res.cookie('accessToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 1000 * 60 * 60,
-    });
+    const tokens = await this.authService.login(login);
+    const {accessToken, refreshToken} = tokens
+    this.cookieService.setAuthCookie(res, 'accessToken', accessToken, 1000 * 60 * 60); // 1h
+    this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, 7 * 24 * 60 * 60 * 1000); // 7d
+
+    // res.cookie('accessToken', accessToken, {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === 'production',
+    //   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    //   maxAge: 1000 * 60 * 60,
+    // });
+    // save in DB
+    await this.authService.revokeAllRefreshTokens(refreshToken);
+
+
     // return { message: 'Login successful', status: true, access_token:token.accessToken, refreshToken:token.refreshToken};
     return { message: 'Login successful', status: true,};
   }
@@ -40,8 +52,31 @@ export class AuthController {
   
   @AllowAnonymous()
   @Post('reset-password')
-  async resetPassword(@Body(new ValidationPipe()) resetPsw: ResetPasswordDto) {
-    await this.authService.resetPassword(resetPsw);
+  async resetPassword(@Body(new ValidationPipe()) resetPsw: ResetPasswordDto, res:Response) {
+    await this.authService.resetPassword(resetPsw, res);
     return { message: 'Password reset successfully', status:true };
+  }
+  
+  @AllowAnonymous()
+  @Post('refresh-token')
+  async refreshToken(@Body(new ValidationPipe()) refreshTokenDto: RefreshTokenDto, @Res({passthrough:true}) res: Response) {
+  
+     const { refreshToken } = await this.authService.refreshToken(refreshTokenDto);
+      this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, 7 * 24 * 60 * 60 * 1000); // 7d
+      // Set new refresh token as HttpOnly cookie
+      // res.cookie('refreshToken', refreshToken , {
+      //   httpOnly: true,
+      //   secure: process.env.NODE_ENV === 'production',
+      //   sameSite: 'none',
+      //   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      // });
+    return { message: 'Password reset successfully', status:true };
+  }
+  @AllowAnonymous()
+  @Post('logout')
+  async logout(@Body(new ValidationPipe()) logout: LogoutDto, res:Response) {
+    await this.authService.logout(logout);
+   this.cookieService.clearCookie(res, 'refreshToken');
+    return { message: 'Logout successful', status: true };
   }
 }
