@@ -90,7 +90,7 @@ export class AuthService {
 
   }
 
-  async resetPassword(resetPsw: ResetPasswordDto, res: Response) {
+  async resetPassword(resetPsw: ResetPasswordDto) {
     const { newPassword, confirmPassword } = resetPsw
     if (newPassword !== confirmPassword) {
       throw new BadRequestException('Passwords do not match');
@@ -113,13 +113,6 @@ export class AuthService {
       await this.usersService.updatePassword(userId, newPassword);
       // 6. Revoke ALL refresh tokens for this user
       await this.usersService.deleteAllRefreshTokens(userId)
-      // Clear cookie
-      res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
-        // path: '/'
-      });
 
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
@@ -165,9 +158,17 @@ export class AuthService {
       });
 
       const user = await this.usersService.findById(payload.sub);
+      
       if (!user) {
-
         throw new UnauthorizedException('User not found');
+      }
+      
+      const stored = await this.usersService.validateRefreshToken(user.id, refreshToken);
+      if (!stored) {
+        throw new UnauthorizedException('Refresh token invalid or revoked');
+      }
+      if (stored.expiresAt < new Date()) {
+        await this.usersService.deleteRefreshToken(refreshToken)
       }
       return this.generateLoginTokens(user)
 
@@ -176,7 +177,6 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token expired');
       }
       throw error
-      // throw new UnauthorizedException('Invalid refresh token');
     }
 
   }
@@ -188,18 +188,17 @@ export class AuthService {
       throw new BadRequestException('Refresh token is required');
     }
     try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
+      await this.jwtService.verifyAsync(refreshToken, {
         secret: this.authConfiguration.jwtRefreshSecret,
         audience: this.authConfiguration.jwtAudience,
         issuer: this.authConfiguration.jwtIssuer
       });
-      const user = await this.usersService.logout(logout);
-      if (!user || user.id !== payload.sub) {
-        throw new ForbiddenException('Invalid refresh token');
-      }
+
+      await this.usersService.deleteRefreshToken(refreshToken)
+
     } catch (error) {
       console.log(error.message);
-      
+
       throw new ForbiddenException('Invalid or expired refresh token');
     }
   }

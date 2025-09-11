@@ -1,8 +1,6 @@
-// import { User,} from './../../generated/prisma/index.d';
 import {
   Injectable,
 } from '@nestjs/common';
-import { User, RefreshToken } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersDto } from './dto/users.dto';
 import { handlePrismaError } from './../utils/prisma.error';
@@ -83,8 +81,30 @@ export class UsersService {
   }
   async logout(logout:LogoutDto) {
     const { refreshToken } = logout
-    await this.prisma.refreshToken.delete({
-      where: { refreshToken },
+    const token = await this.prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
     });
+    if (token) {
+      await this.prisma.refreshToken.delete({
+        where: { id: token.id },
+      });
+      
+    }
+    
   }
+  async validateRefreshToken(userId: string, token: string) {
+  const stored = await this.prisma.refreshToken.findFirst({
+    where: { userId, token },
+  });
+
+  return stored;
+}
+
+  async deleteRefreshToken(refreshToken: string) {
+  await this.prisma.refreshToken.delete({
+    where: {
+      token: refreshToken,
+    },
+  });
+}
 }
