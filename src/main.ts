@@ -14,6 +14,10 @@ async function bootstrap() {
     })
   );
   console.log(process.env.PORT);
+   app.enableCors({
+    origin: "http://localhost:3000", // ✅ your Next.js frontend
+    credentials: true,              // ✅ allow cookies
+  });
   await app.listen(process.env.PORT ?? 3000);
   
 }

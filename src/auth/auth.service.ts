@@ -36,8 +36,11 @@ export class AuthService {
     if (!passwordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
-
-    return this.generateLoginTokens(user)
+    try {
+    return await this.generateLoginTokens(user);
+  } catch (error) {
+    throw new BadRequestException(`Failed to generate tokens: ${error.message}`);
+  }
 
   }
   private async signToken<T>(userId: string, expiresIn: string, secret: string, payload?: T,) {
@@ -57,7 +60,9 @@ export class AuthService {
     const refreshToken = await this.signToken(user.id, this.authConfiguration.jwtRefreshExpiration!, this.authConfiguration.jwtRefreshSecret!)
     // Compute expiresAt
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
+    const savedToken = await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
+   console.log("Saved refresh token:", savedToken);
+    
     return {
       accessToken,
       refreshToken,
@@ -158,12 +163,14 @@ export class AuthService {
       });
 
       const user = await this.usersService.findById(payload.sub);
-      
+      console.log(user);
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
       
-      const stored = await this.usersService.validateRefreshToken(user.id, refreshToken);
+      const stored = await this.usersService.validateRefreshToken(refreshToken);
+      console.log(stored);
+      
       if (!stored) {
         throw new UnauthorizedException('Refresh token invalid or revoked');
       }

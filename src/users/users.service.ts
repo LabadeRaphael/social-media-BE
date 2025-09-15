@@ -45,13 +45,25 @@ export class UsersService {
     });
   }
   async saveRefreshToken(userId: string, token: string, expiresAt: Date){
-     return this.prisma.refreshToken.create({
-      data: {
-        userId,
-        token,
-        expiresAt
-      },
+    try {
+      // Validate inputs
+    if (!userId || !token || !expiresAt) {
+      throw new Error('Invalid input: userId, token, and expiresAt are required');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+    
+    const saved = await this.prisma.refreshToken.create({
+      data: { userId, token, expiresAt },
     });
+    console.log("Saved refresh token:", saved);
+    return saved;
+  } catch (error) {
+    console.error("Failed to save refresh token:", error); // fix typo "messsage"
+    throw error; // let it bubble up
+  }
   }
   async findByEmail(forgotPsw: ForgotPswDto) {
     const { email } = forgotPsw
@@ -81,7 +93,7 @@ export class UsersService {
   }
   async logout(logout:LogoutDto) {
     const { refreshToken } = logout
-    const token = await this.prisma.refreshToken.findUnique({
+    const token = await this.prisma.refreshToken.findFirst({
       where: { token: refreshToken },
     });
     if (token) {
@@ -92,16 +104,15 @@ export class UsersService {
     }
     
   }
-  async validateRefreshToken(userId: string, token: string) {
-  const stored = await this.prisma.refreshToken.findFirst({
-    where: { userId, token },
+  async validateRefreshToken(refreshToken: string) {
+  return this.prisma.refreshToken.findFirst({
+    where: { token: refreshToken },
   });
 
-  return stored;
 }
 
   async deleteRefreshToken(refreshToken: string) {
-  await this.prisma.refreshToken.delete({
+  await this.prisma.refreshToken.deleteMany({
     where: {
       token: refreshToken,
     },

@@ -72,7 +72,7 @@ export class AuthController {
       //   sameSite: 'none',
       //   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       // });
-    return { message: 'Password reset successfully', status:true };
+    return { message: 'Refresh token successful', status:true };
   }
   @AllowAnonymous()
   @Post('logout')
