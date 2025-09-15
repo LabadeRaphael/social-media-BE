@@ -1,3 +1,9 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,71 +12,3 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  password      String
-  createdAt     DateTime       @default(now())
-  userName      String         @unique
-  posts         Post[]
-  refreshTokens RefreshToken[]
-    // Relations
-  messages       Message[]       @relation("UserMessages")     // one-to-many: one user → many messages
-  conversations  Conversation[]  @relation("UserConversations") // many-to-many: user can join many conversations
-  seenMessages   Message[]       @relation("SeenMessages")      // many-to-many: messages the user has seen
-}
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   
-  userId    String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Post {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  authorId  String
-  createdAt DateTime @default(now())
-  author    User     @relation(fields: [authorId], references: [id])
-}
-
-
-model Conversation {
-  id           String     @id @default(uuid())
-  isGroup      Boolean    @default(false)
-  createdAt    DateTime   @default(now())
-
-  // Relations
-  participants User[]     @relation("UserConversations") // many-to-many: multiple users can be in one conversation
-  messages     Message[]                              // one-to-many: one conversation → many messages
-}
-
-model Message {
-  id             String       @id @default(uuid())
-  text           String?
-  type           MessageType  @default(TEXT)
-  mediaUrl       String?      // optional: voice, image, file
-  createdAt      DateTime     @default(now())
-
-  // Relations
-  senderId       String
-  sender         User         @relation("UserMessages", fields: [senderId], references: [id])
-
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-
-  seenBy         User[]       @relation("SeenMessages") // many-to-many: users who saw this message
-}
-
-enum MessageType {
-  TEXT
-  VOICE
-  IMAGE
-  FILE
-}
-

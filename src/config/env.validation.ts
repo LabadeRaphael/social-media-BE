@@ -6,9 +6,7 @@ export const envValidator = Joi.object({
 
   // Database
   DATABASE_URL: Joi.string().uri().required(),
-
-  // Prisma (optional)
-  PRISMA_QUERY_ENGINE_BINARY: Joi.string().uri().optional(),
+  
   // Auth
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),

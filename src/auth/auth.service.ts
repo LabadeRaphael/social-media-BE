@@ -9,10 +9,11 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { ForgotPswDto } from './dto/forgot-psw.dto';
 import { ResetPasswordDto } from './dto/reset-psw.dto';
-import { User } from 'generated/prisma';
+// import { User } from 'generated/prisma';
 import { Response } from 'express';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { User } from '@prisma/client';
 @Injectable()
 export class AuthService {
   constructor(
