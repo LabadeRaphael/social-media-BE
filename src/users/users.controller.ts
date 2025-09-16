@@ -7,7 +7,7 @@ export class UsersController {
   constructor(private userService: UsersService) {}
   @Get()
   createUser(@Body(new ValidationPipe()) user: UsersDto) {
-    return this.userService.register(user);
+    // return this.userService.register(user);
   }
   @Get(':email')
   getUser() {

@@ -12,3 +12,63 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  userName      String         @unique
+  refreshTokens RefreshToken[]
+  // Relations
+  messages       Message[]       @relation("UserMessages")       // one user → many messages
+  conversations  Conversation[]  @relation("UserConversations")  // user can have many conversations
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+model Conversation {
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+
+  // Relations
+  participants User[]   @relation("UserConversations")  // 1-to-1: two users per conversation
+  messages     Message[]                               // conversation can have many messages
+
+  // Optional extra
+  lastMessageId String? @unique
+  lastMessage   Message?   @relation("ConversationLastMessage", fields: [lastMessageId], references: [id])
+
+}
+model Message {
+  id             String       @id @default(uuid())
+  text           String?
+  type           MessageType  @default(TEXT)
+  createdAt      DateTime     @default(now())
+
+  // Relations
+  senderId       String
+  sender         User         @relation("UserMessages", fields: [senderId], references: [id])
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+ // Backlink for lastMessage
+  Conversation   Conversation? @relation("ConversationLastMessage")
+}
+
+enum MessageType {
+  TEXT
+  VOICE
+  IMAGE
+  FILE
+}
+
+
+

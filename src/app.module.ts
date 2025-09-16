@@ -10,8 +10,9 @@ import { AuthorizeGuard } from './auth/guards/authorize.guard';
 import { ConfigModule } from '@nestjs/config';
 import databaseConfig from './config/database.config';
 import { envValidator } from './config/env.validation';
+import { ConversationModule } from './conversations/conversations.module';
 @Module({
-  imports: [UsersModule, PrismaModule, AuthModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig], validationSchema: envValidator})],
+  imports: [UsersModule, PrismaModule, AuthModule, ConversationModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig], validationSchema: envValidator})],
   controllers: [AppController],
   providers: [
     AppService,

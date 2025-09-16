@@ -126,7 +126,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersDto } from './dto/users.dto';
 import { handlePrismaError } from './../utils/prisma.error';
-import * as bcrypt from 'bcrypt';
 import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { LogoutDto } from 'src/auth/dto/logout.dto';
@@ -135,11 +134,9 @@ import { LogoutDto } from 'src/auth/dto/logout.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async register(user: UsersDto) {
-    try {
-      const hashedPassword = await bcrypt.hash(user.password, 10);
+  async register(user: UsersDto, hashedPassword: string) {
 
-      const createUser = await this.prisma.User.create({
+       return this.prisma.user.create({
         data: {
           email: user.email,
           userName: user.userName,
@@ -152,19 +149,16 @@ export class UsersService {
         },
       });
 
-      if (!createUser) {
-        return { message: 'Signup failed', status: false };
-      }
+      // if (!createUser) {
+      //   return { message: 'Signup failed', status: false };
+      // }
 
-      return { message: 'Signup successful', status: true };
-    } catch (error: any) {
-      handlePrismaError(error);
-    }
   }
+    
 
   async login(login: LoginDto) {
     const { email } = login;
-    return this.prisma.User.findUnique({
+    return this.prisma.user.findUnique({
       where: { email },
     });
   }
@@ -175,69 +169,71 @@ export class UsersService {
         throw new Error('Invalid input: userId, token, and expiresAt are required');
       }
 
-      const user = await this.prisma.User.findUnique({ where: { id: userId } });
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      console.log("prisma user",user);
+      
       if (!user) {
         throw new Error(`User with ID ${userId} not found`);
       }
 
-      const saved = await this.prisma.RefreshToken.create({
+      const saved = await this.prisma.refreshToken.create({
         data: { userId, token, expiresAt },
       });
       console.log('Saved refresh token:', saved);
       return saved;
     } catch (error) {
       console.error('Failed to save refresh token:', error);
+      handlePrismaError(error);
       throw error;
     }
   }
 
   async findByEmail(forgotPsw: ForgotPswDto) {
     const { email } = forgotPsw;
-    return this.prisma.User.findUnique({
+    return this.prisma.user.findUnique({
       where: { email },
     });
   }
 
-  async updatePassword(userId: string, newPassword: string) {
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    return this.prisma.User.update({
+  async updatePassword(userId: string, hashedPassword: string) {
+    return this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
   }
 
   async findById(userId: string) {
-    return this.prisma.User.findUnique({
+    return this.prisma.user.findUnique({
       where: { id: userId },
     });
   }
 
   async deleteAllRefreshTokens(userId: string) {
-    return this.prisma.RefreshToken.deleteMany({
+    return this.prisma.refreshToken.deleteMany({
       where: { userId },
     });
   }
 
   async logout(logout: LogoutDto) {
     const { refreshToken } = logout;
-    const token = await this.prisma.RefreshToken.findFirst({
+    const token = await this.prisma.refreshToken.findFirst({
       where: { token: refreshToken },
     });
     if (token) {
-      await this.prisma.RefreshToken.delete({
+      await this.prisma.refreshToken.delete({
         where: { id: token.id },
       });
     }
   }
 
   async validateRefreshToken(refreshToken: string) {
-    return this.prisma.RefreshToken.findFirst({
+    return this.prisma.refreshToken.findFirst({
       where: { token: refreshToken },
     });
   }
 
   async deleteRefreshToken(refreshToken: string) {
-    await this.prisma.RefreshToken.deleteMany({
+    await this.prisma.refreshToken.deleteMany({
       where: {
         token: refreshToken,
       },

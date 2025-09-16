@@ -18,8 +18,9 @@ export class AuthController {
   ) {}
   @AllowAnonymous()
   @Post('signup')
-  createUser(@Body(new ValidationPipe()) user: UsersDto) {
-    return this.authService.register(user);    
+  async createUser(@Body(new ValidationPipe()) user: UsersDto) {
+    await this.authService.register(user);  
+    return { message: 'Signup successful', status: true };
   }
   @AllowAnonymous()
   @Post('login')
