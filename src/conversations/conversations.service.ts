@@ -84,4 +84,20 @@ export class ConversationService {
       },
     });
   }
+  // conversation.service.ts
+async getMessages(conversationId: string, skip: number, take: number) {
+  return this.prisma.message.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: 'desc' }, // latest first
+    skip,
+    take,
+    select: {
+      id: true,
+      text: true,
+      createdAt: true,
+      sender: { select: { id: true, userName: true, email: true } },
+    },
+  });
+}
+
 }

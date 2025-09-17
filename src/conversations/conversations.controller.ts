@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, ValidationPipe, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
 import { ConversationService } from './conversations.service';
 import { ConversationDto } from './dto/conversations.dto';
 
@@ -30,4 +30,14 @@ export class ConversationController {
   async getConversation(@Param('conversationId') conversationId: string) {
     return this.conversationService.getConversation(conversationId);
   }
+  // conversation.controller.ts
+@Get('conversations/:conversationId/messages')
+async getMessages(
+  @Param('conversationId') conversationId: string,
+  @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+  @Query('take', new DefaultValuePipe(20), ParseIntPipe) take: number,
+) {
+  return this.conversationService.getMessages(conversationId, skip, take);
+}
+
 }
