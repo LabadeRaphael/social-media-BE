@@ -56,7 +56,7 @@
 //     if (!user) {
 //       throw new Error(`User with ID ${userId} not found`);
 //     }
-    
+
 //     const saved = await this.prisma.refreshToken.create({
 //       data: { userId, token, expiresAt },
 //     });
@@ -102,9 +102,9 @@
 //       await this.prisma.refreshToken.delete({
 //         where: { id: token.id },
 //       });
-      
+
 //     }
-    
+
 //   }
 //   async validateRefreshToken(refreshToken: string) {
 //   return this.prisma.refreshToken.findFirst({
@@ -132,29 +132,29 @@ import { LogoutDto } from 'src/auth/dto/logout.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async register(user: UsersDto, hashedPassword: string) {
 
-       return this.prisma.user.create({
-        data: {
-          email: user.email,
-          userName: user.userName,
-          password: hashedPassword,
-        },
-        select: {
-          id: true,
-          email: true,
-          userName: true,
-        },
-      });
+    return this.prisma.user.create({
+      data: {
+        email: user.email,
+        userName: user.userName,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+        email: true,
+        userName: true,
+      },
+    });
 
-      // if (!createUser) {
-      //   return { message: 'Signup failed', status: false };
-      // }
+    // if (!createUser) {
+    //   return { message: 'Signup failed', status: false };
+    // }
 
   }
-    
+
 
   async login(login: LoginDto) {
     const { email } = login;
@@ -170,8 +170,8 @@ export class UsersService {
       }
 
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      console.log("prisma user",user);
-      
+      console.log("prisma user", user);
+
       if (!user) {
         throw new Error(`User with ID ${userId} not found`);
       }
@@ -236,6 +236,22 @@ export class UsersService {
     await this.prisma.refreshToken.deleteMany({
       where: {
         token: refreshToken,
+      },
+    });
+  }
+
+
+  async getUserByUsername(userName: string) {
+    return this.prisma.user.findMany({
+      where: {
+        userName:{
+          contains: userName,
+          mode: 'insensitive',
+        }
+      },select:{
+        id: true,
+        email: true,
+        userName: true,
       },
     });
   }
