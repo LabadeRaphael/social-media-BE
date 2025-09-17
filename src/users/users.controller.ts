@@ -7,9 +7,8 @@ export class UsersController {
  
   @Get('search')
  async getUserName( @Query('userName') userName: string ) {
-    console.log(userName);
-    userName.trim()
-    return await this.userService.getUserByUsername(userName);
+    const normalized = userName.trim().toLowerCase(); // controller-level
+    return await this.userService.getUserByUsername(normalized);
   //  console.log(user);
    
   }

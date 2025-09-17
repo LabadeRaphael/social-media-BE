@@ -129,12 +129,13 @@ import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { LogoutDto } from 'src/auth/dto/logout.dto';
+import { RegisterDto } from 'src/auth/dto/register.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async register(user: UsersDto, hashedPassword: string) {
+  async register(user: RegisterDto, hashedPassword: string) {
 
     return this.prisma.user.create({
       data: {
@@ -148,11 +149,6 @@ export class UsersService {
         userName: true,
       },
     });
-
-    // if (!createUser) {
-    //   return { message: 'Signup failed', status: false };
-    // }
-
   }
 
 
@@ -241,11 +237,11 @@ export class UsersService {
   }
 
 
-  async getUserByUsername(userName: string) {
+  async getUserByUsername(normalized: string) {
     return this.prisma.user.findMany({
       where: {
         userName:{
-          contains: userName,
+          contains: normalized,
           mode: 'insensitive',
         }
       },select:{

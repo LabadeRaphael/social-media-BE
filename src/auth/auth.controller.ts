@@ -9,6 +9,7 @@ import { ResetPasswordDto } from './dto/reset-psw.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { CookiesService } from './cookies.service';
+import { RegisterDto } from './dto/register.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -18,13 +19,13 @@ export class AuthController {
   ) {}
   @AllowAnonymous()
   @Post('signup')
-  async createUser(@Body(new ValidationPipe()) user: UsersDto) {
+  async createUser(@Body() user: RegisterDto) {
     await this.authService.register(user);  
     return { message: 'Signup successful', status: true };
   }
   @AllowAnonymous()
   @Post('login')
-  async login(@Body(new ValidationPipe()) login: LoginDto, @Res({passthrough:true}) res: Response) {
+  async login(@Body() login: LoginDto, @Res({passthrough:true}) res: Response) {
     const tokens = await this.authService.login(login);
     const {accessToken, refreshToken} = tokens
     this.cookieService.setAuthCookie(res, 'accessToken', accessToken, 1000 * 60 * 60); // 1h
