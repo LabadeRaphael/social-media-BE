@@ -20,9 +20,11 @@ model User {
   createdAt     DateTime       @default(now())
   userName      String         @unique
   refreshTokens RefreshToken[]
+  resetTokens   PasswordResetToken[]
   // Relations
   messages       Message[]       @relation("UserMessages")       // one user → many messages
-  conversations  Conversation[]  @relation("UserConversations")  // user can have many conversations
+  participants   Participant[]   // changed line
+  // conversations  Conversation[]  @relation("UserConversations")  // user can have many conversations
 }
 
 model RefreshToken {
@@ -36,9 +38,9 @@ model RefreshToken {
 model Conversation {
   id        String      @id @default(uuid())
   createdAt DateTime    @default(now())
-
+  participants Participant[]  // changed line
   // Relations
-  participants User[]   @relation("UserConversations")  // 1-to-1: two users per conversation
+  // participants User[]   @relation("UserConversations")  // 1-to-1: two users per conversation
   messages     Message[]                               // conversation can have many messages
 
   // Optional extra
@@ -46,12 +48,22 @@ model Conversation {
   lastMessage   Message?   @relation("ConversationLastMessage", fields: [lastMessageId], references: [id])
 
 }
+model Participant {
+  id              String        @id @default(uuid())
+  userId          String
+  conversationId  String
+  unreadCount     Int           @default(0)
+  user            User          @relation(fields: [userId], references: [id])
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+
+  @@unique([userId, conversationId]) // one entry per user per conversation
+}
 model Message {
   id             String       @id @default(uuid())
   text           String?
   type           MessageType  @default(TEXT)
   createdAt      DateTime     @default(now())
-
+  isRead        Boolean  @default(false) // 👈 Add this line
   // Relations
   senderId       String
   sender         User         @relation("UserMessages", fields: [senderId], references: [id])
@@ -61,6 +73,17 @@ model Message {
 
  // Backlink for lastMessage
   Conversation   Conversation? @relation("ConversationLastMessage")
+}
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  hashedPswToken String  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  @@index([userId, hashedPswToken])
 }
 
 enum MessageType {

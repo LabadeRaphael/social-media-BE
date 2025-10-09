@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 
 @Injectable()
 export class CookiesService {
@@ -18,5 +18,11 @@ export class CookiesService {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     });
+  }
+  getAuthCookie(
+    req: Request & { cookies?: Record<string, string> },
+    name: string
+  ): string | undefined {
+    return req.cookies?.[name] as string | undefined; // assert type explicitly
   }
 }

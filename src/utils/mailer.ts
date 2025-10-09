@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendResetPasswordEmail = (to: string, token: string) => {
-  const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+  const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password?token=${token}`;
 
   const mailOptions = {
     from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,

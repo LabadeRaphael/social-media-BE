@@ -6,9 +6,9 @@ export class MessageDto {
   @IsString()
   conversationId: string;
 
-  @IsNotEmpty()
-  @IsString()
-  senderId: string;
+  // @IsNotEmpty()
+  // @IsString()
+  // senderId: string;
 
   // message text (for TEXT) or URL/path (for IMAGE/FILE/VOICE)
   @IsOptional()

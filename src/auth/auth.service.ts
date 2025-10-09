@@ -1,5 +1,5 @@
 import { sendResetPasswordEmail } from './../utils/mailer';
-import { BadRequestException, Body, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, ForbiddenException, Inject, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -10,8 +10,6 @@ import * as bcrypt from 'bcrypt';
 import { ForgotPswDto } from './dto/forgot-psw.dto';
 import { ResetPasswordDto } from './dto/reset-psw.dto';
 import { Response } from 'express';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { LogoutDto } from './dto/logout.dto';
 import { User } from '@prisma/client';
 @Injectable()
 export class AuthService {
@@ -22,10 +20,10 @@ export class AuthService {
     private readonly jwtService: JwtService
   ) { }
   async register(user: RegisterDto) {
-      const hashedPassword = await bcrypt.hash(user.password, 10);
-      return this.usersService.register(user, hashedPassword);
-      
-    
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    return this.usersService.register(user, hashedPassword);
+
+
   }
   async login(login: LoginDto) {
     // console.log(this.authConfiguration);
@@ -35,12 +33,14 @@ export class AuthService {
 
     }
     const passwordValid = await bcrypt.compare(login.password, user.password);
+    console.log(passwordValid);
+    
     if (!passwordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
-  
+
     return await this.generateLoginTokens(user);
-  
+
 
   }
   private async signToken<T>(userId: string, expiresIn: string, secret: string, payload?: T,) {
@@ -82,23 +82,25 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPsw: ForgotPswDto) {
-  
+
     const user = await this.usersService.findByEmail(forgotPsw);
     if (!user) {
       console.log(`Password reset requested for non-existent email: ${forgotPsw.email}`);
       return;
     }
-    
-    const resetPswToken = await this.generateResetToken(user)
-    console.log(resetPswToken);
 
+    const resetPswToken = await this.generateResetToken(user)
+    console.log("resetPswToken", resetPswToken);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+     const hashedPswToken = await bcrypt.hash(resetPswToken, 10);
+     await this.usersService.saveResetPswToken(user.id, hashedPswToken, expiresAt)
     // Send email with nodemailer util
     await sendResetPasswordEmail(user.email, resetPswToken);
 
   }
 
   async resetPassword(resetPsw: ResetPasswordDto) {
-  
+
     const { newPassword, confirmPassword } = resetPsw
     if (newPassword !== confirmPassword) {
       throw new BadRequestException('Passwords do not match');
@@ -110,10 +112,6 @@ export class AuthService {
         issuer: this.authConfiguration.jwtIssuer
       });
       const userId = payload.sub;
-      if (!userId) {
-      
-        throw new UnauthorizedException('Invalid credentials');
-      }
       const user = await this.usersService.findById(userId);
       if (!user) {
         throw new BadRequestException('Invalid token or user not found');
@@ -129,57 +127,40 @@ export class AuthService {
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
         throw new BadRequestException('Reset token has expired. Please request a new one.');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new BadRequestException('Invalid reset token.');
       } else {
-        console.log(error.message);
-        throw error
+        throw new BadRequestException(error.message || 'An error occurred.');
       }
     }
 
   }
+  async refreshToken(oldRefreshToken?: string) {
 
-  async revokeAllRefreshTokens(refreshToken: string) {
-    try {
-      const {sub} = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.authConfiguration.jwtRefreshSecret,
-        audience: this.authConfiguration.jwtAudience,
-        issuer: this.authConfiguration.jwtIssuer,
-      });
-
-      // delete all tokens for this user
-      await this.usersService.deleteAllRefreshTokens(sub);
-    } catch (error) {
-      console.log(error.message);
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-  }
-  async refreshToken(refreshTokenDto: RefreshTokenDto) {
-
-    const { refreshToken } = refreshTokenDto
-
-    if (!refreshToken) {
+    if (!oldRefreshToken) {
       throw new BadRequestException('Refresh token is required');
     }
     try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
+      const payload = await this.jwtService.verifyAsync(oldRefreshToken, {
         secret: this.authConfiguration.jwtRefreshSecret,
         audience: this.authConfiguration.jwtAudience,
         issuer: this.authConfiguration.jwtIssuer
       });
-  
+
       const user = await this.usersService.findById(payload.sub);
       console.log(user);
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
 
-      const stored = await this.usersService.validateRefreshToken(refreshToken);
+      const stored = await this.usersService.validateRefreshToken(oldRefreshToken);
       console.log(stored);
 
       if (!stored) {
         throw new UnauthorizedException('Refresh token invalid or revoked');
       }
       if (stored.expiresAt < new Date()) {
-        await this.usersService.deleteRefreshToken(refreshToken)
+        await this.usersService.deleteRefreshToken(oldRefreshToken)
       }
       return this.generateLoginTokens(user)
 
@@ -192,8 +173,7 @@ export class AuthService {
 
   }
 
-  async logout(logout: LogoutDto) {
-    const { refreshToken } = logout
+  async logout(refreshToken?: string) {
 
     if (!refreshToken) {
       throw new BadRequestException('Refresh token is required');

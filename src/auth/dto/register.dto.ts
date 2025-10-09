@@ -4,7 +4,7 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Email is required' })
   @IsString({ message: 'Email must be a string value.' })
   @Transform(({ value }) => String(value).trim().toLowerCase())
-  @IsEmail()
+  @IsEmail({}, { message: 'Email must be valid.' })
   email: string;
 
   @IsString({ message: 'Username must be a string value.' })
