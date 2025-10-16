@@ -61,6 +61,7 @@ model Participant {
 model Message {
   id             String       @id @default(uuid())
   text           String?
+  mediaUrl       String?
   type           MessageType  @default(TEXT)
   createdAt      DateTime     @default(now())
   isRead        Boolean  @default(false) // 👈 Add this line

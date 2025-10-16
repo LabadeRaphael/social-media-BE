@@ -258,6 +258,8 @@ return await this.prisma.message.findMany({
       select: {
         id: true,
         text: true,
+        type:true,
+        mediaUrl:true,
         createdAt: true,
         isRead: true,
         sender: { select: { id: true, userName: true, email: true } },
