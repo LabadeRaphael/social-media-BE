@@ -12,15 +12,18 @@ import databaseConfig from './config/database.config';
 import { envValidator } from './config/env.validation';
 import { ConversationModule } from './conversations/conversations.module';
 import { MessageModule } from './messages/messages.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TokenCleanupService } from './auth/token-cleanup.service';
 @Module({
-  imports: [UsersModule, PrismaModule, AuthModule, ConversationModule, MessageModule, ConfigModule.forRoot({isGlobal:true,load:[databaseConfig], validationSchema: envValidator})],
+  imports: [UsersModule, PrismaModule, AuthModule, ConversationModule, MessageModule, ScheduleModule.forRoot(),ConfigModule.forRoot({isGlobal:true,load:[databaseConfig], validationSchema: envValidator})],
   controllers: [AppController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
       useClass: AuthorizeGuard
-    }
+    },
+    TokenCleanupService
   ]
 })
 export class AppModule {}
