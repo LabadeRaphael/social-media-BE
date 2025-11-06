@@ -34,7 +34,7 @@ export class AuthService {
     }
     const passwordValid = await bcrypt.compare(login.password, user.password);
     console.log(passwordValid);
-    
+
     if (!passwordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -92,8 +92,8 @@ export class AuthService {
     const resetPswToken = await this.generateResetToken(user)
     console.log("resetPswToken", resetPswToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
-     const hashedPswToken = await bcrypt.hash(resetPswToken, 10);
-     await this.usersService.saveResetPswToken(user.id, hashedPswToken, expiresAt)
+    const hashedPswToken = await bcrypt.hash(resetPswToken, 10);
+    await this.usersService.saveResetPswToken(user.id, hashedPswToken, expiresAt)
     // Send email with nodemailer util
     await sendResetPasswordEmail(user.email, resetPswToken);
 
@@ -114,14 +114,25 @@ export class AuthService {
       const userId = payload.sub;
       const user = await this.usersService.findById(userId);
       if (!user) {
-        throw new BadRequestException('Invalid token or user not found');
+        throw new UnauthorizedException('Invalid token or user not found');
       }
       const isSamePassword = await bcrypt.compare(newPassword, user.password);
       if (isSamePassword) {
         throw new BadRequestException('New password cannot be the same as the old one');
       }
+
       const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const tokenRecord = await this.usersService.findResetToken(userId)
+      console.log(tokenRecord);
+
+      if (!tokenRecord) {
+        throw new BadRequestException('This reset link is invalid or has already been used.');
+      }
+      const match = await bcrypt.compare(resetPsw.token, tokenRecord.hashedPswToken);
+      if (!match) throw new ForbiddenException('Invalid reset token');
+
       await this.usersService.updatePassword(userId, hashedPassword);
+      await this.usersService.updateTokenState(userId);
       await this.usersService.deleteAllRefreshTokens(userId)
 
     } catch (error) {

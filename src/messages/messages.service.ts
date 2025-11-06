@@ -21,6 +21,7 @@ export class MessageService {
         id: true,
         text: true,
         type: true,
+        conversationId:true,
         createdAt: true,
         senderId: true,
         isRead: true,

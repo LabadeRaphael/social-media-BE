@@ -134,7 +134,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         const userId = (socket as any).userId;
         if (userId) {
             this.onlineUsers.delete(userId);
-             this.server.emit('user_offline', { userId });
+            this.server.emit('user_offline', { userId });
             console.log(`👋 User ${userId} disconnected`);
         }
     }
@@ -144,19 +144,29 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
      */
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: { text: string; conversationId: string },
+        @MessageBody() data: { text: string; conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string|null },
         @ConnectedSocket() socket: Socket,
     ) {
         const senderId = (socket as any).userId;
         if (!senderId) return socket.emit('error', 'Unauthorized');
 
         const message = await this.messageService.sendMessage(
-            { text: data.text, conversationId: data.conversationId, type: 'TEXT' },
+            {
+                text: data.text,
+                conversationId: data.conversationId,
+                type: data.type || 'TEXT', // use 'VOICE' if sent
+                mediaUrl: data.mediaUrl || null,
+            },
             senderId,
         );
 
         this.server.to(data.conversationId).emit('receive_message', message);
-        socket.emit('receive_message', message);
+        // socket.emit('receive_message', message);
+        console.log("data", data);
+        
+        // Do just one:
+// The sender will also receive it via the room broadcast
+
     }
     @SubscribeMessage('mark_as_read')
     async handleMarkAsRead(
@@ -172,38 +182,38 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         // Broadcast to everyone in the conversation
         this.server.to(conversationId).emit('messages_read', { conversationId, userId });
     }
-// typing indicator events
-@SubscribeMessage("typing")
-handleTyping(
-  @MessageBody() data: { conversationId: string; senderId: string },
-  @ConnectedSocket() client: Socket
-) {
-    console.log("Typing", data.senderId);
-    
-  // broadcast to others in the same conversation
-  client.to(data.conversationId).emit("user_typing", {
-    conversationId: data.conversationId,
-    senderId: data.senderId,
-  });
-}
+    // typing indicator events
+    @SubscribeMessage("typing")
+    handleTyping(
+        @MessageBody() data: { conversationId: string; senderId: string },
+        @ConnectedSocket() client: Socket
+    ) {
+        console.log("Typing", data.senderId);
 
-@SubscribeMessage("stop_typing")
-handleStopTyping(
-  @MessageBody() data: { conversationId: string; senderId: string },
-  @ConnectedSocket() client: Socket
-) {
-  client.to(data.conversationId).emit("user_stop_typing", {
-    conversationId: data.conversationId,
-    senderId: data.senderId,
-  });
-}
+        // broadcast to others in the same conversation
+        client.to(data.conversationId).emit("user_typing", {
+            conversationId: data.conversationId,
+            senderId: data.senderId,
+        });
+    }
+
+    @SubscribeMessage("stop_typing")
+    handleStopTyping(
+        @MessageBody() data: { conversationId: string; senderId: string },
+        @ConnectedSocket() client: Socket
+    ) {
+        client.to(data.conversationId).emit("user_stop_typing", {
+            conversationId: data.conversationId,
+            senderId: data.senderId,
+        });
+    }
 
 
     /**
      * Handle joining conversation rooms
      */
     @SubscribeMessage('join_conversation')
-    async handleJoinConversation(
+    handleJoinConversation(
         @MessageBody() conversationId: string,
         @ConnectedSocket() socket: Socket,
     ) {

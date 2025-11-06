@@ -45,6 +45,7 @@ export class AuthController {
   async resetPassword(
     @Body() resetPsw: ResetPasswordDto, 
     @Res({ passthrough: true }) res: Response) {
+    
     await this.authService.resetPassword(resetPsw);
     this.cookieService.clearCookie(res, 'refreshToken');
     this.cookieService.clearCookie(res, 'accessToken');

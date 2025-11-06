@@ -77,8 +77,8 @@ model Message {
 }
 model PasswordResetToken {
   id        String   @id @default(uuid())
-  hashedPswToken String  
-  userId    String
+  hashedPswToken String   @unique
+  userId    String 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   expiresAt DateTime

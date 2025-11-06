@@ -18,4 +18,8 @@ export class MessageDto {
   @IsNotEmpty()
   @IsEnum(MessageType)
   type: MessageType;
+  
+  @IsNotEmpty()
+  @IsString()
+  mediaUrl?: string|null;
 }
