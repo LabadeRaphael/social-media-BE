@@ -65,10 +65,20 @@ export class AuthService {
     const savedToken = await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
     console.log("Saved refresh token:", savedToken);
 
+    // console.log(this.authConfiguration.jwtAccessExpiration);
+    // console.log(this.authConfiguration.jwtRefreshExpiration);
+     const decoded = this.jwtService.verify(accessToken, {
+        secret: this.authConfiguration.jwtAccessSecret,
+        audience: this.authConfiguration.jwtAudience,
+        issuer: this.authConfiguration.jwtIssuer
+      });
+    
     return {
       accessToken,
       refreshToken,
+      accessTokenExpireAt: decoded.exp * 1000,
     }
+    
   }
   // Only generates reset token for password reset
   private async generateResetToken(user: User) {
@@ -80,6 +90,8 @@ export class AuthService {
 
     return resetPswToken;
   }
+  
+ 
 
   async forgotPassword(forgotPsw: ForgotPswDto) {
 

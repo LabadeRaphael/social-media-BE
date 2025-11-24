@@ -119,8 +119,15 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             // ✅ 4. Store mapping
             this.onlineUsers.set(userId, socket.id);
             (socket as any).userId = userId; // attach userId to socket for reuse
-            this.server.emit('user_online', { userId });
-            console.log(`✅ User ${userId} connected with socket ID ${socket.id}`);
+
+            console.log("✅ Connected users:", Array.from(this.onlineUsers.keys()));
+
+            // ✅ Always emit the full updated list
+            this.server.emit('online_users', Array.from(this.onlineUsers.keys()));
+
+            // ✅ Also send current list only to the newly connected user
+            socket.emit('online_users', Array.from(this.onlineUsers.keys()));
+
         } catch (err) {
             console.log('❌ Invalid token or connection refused', err.message);
             socket.disconnect();
@@ -134,8 +141,15 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         const userId = (socket as any).userId;
         if (userId) {
             this.onlineUsers.delete(userId);
-            this.server.emit('user_offline', { userId });
-            console.log(`👋 User ${userId} disconnected`);
+            console.log("👋 User disconnected:", userId);
+            console.log("✅ Remaining users:", Array.from(this.onlineUsers.keys()));
+
+            // ✅ Emit same consistent list again to everyone
+            this.server.emit('online_users', Array.from(this.onlineUsers.keys()));
+
+            // console.log("array", Array.from(this.onlineUsers.keys()));
+            // this.server.emit('user_offline', Array.from(this.onlineUsers.keys()));
+            // console.log(`👋 User ${userId} disconnected`);
         }
     }
 
@@ -144,11 +158,12 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
      */
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: { text: string; conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string|null },
+        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null },
         @ConnectedSocket() socket: Socket,
     ) {
         const senderId = (socket as any).userId;
         if (!senderId) return socket.emit('error', 'Unauthorized');
+        console.log("sendMessageData", data);
 
         const message = await this.messageService.sendMessage(
             {
@@ -160,12 +175,20 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             senderId,
         );
 
+        // ✅ 2. Send to everyone in the conversation room
         this.server.to(data.conversationId).emit('receive_message', message);
-        // socket.emit('receive_message', message);
-        console.log("data", data);
-        
-        // Do just one:
-// The sender will also receive it via the room broadcast
+
+        // ✅ 3. Send directly to the receiver if they’re online
+        const receiverSocketId = this.onlineUsers.get(data.receiverId);
+        console.log("receiverId", receiverSocketId);
+
+        if (receiverSocketId) {
+            this.server.to(receiverSocketId).emit('receive_message', message);
+            console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
+        } else {
+            console.log(`⚠️ Receiver ${data.receiverId} is offline. Message saved only.`);
+        }
+
 
     }
     @SubscribeMessage('mark_as_read')
@@ -188,7 +211,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         @MessageBody() data: { conversationId: string; senderId: string },
         @ConnectedSocket() client: Socket
     ) {
-        console.log("Typing", data.senderId);
+        // console.log("Typing", data.senderId);
 
         // broadcast to others in the same conversation
         client.to(data.conversationId).emit("user_typing", {
@@ -221,7 +244,9 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         if (!userId) return socket.emit('error', 'Unauthorized');
 
         // ✅ optionally check if user is a participant before joining (later step)
+        console.log("the conv", conversationId);
         socket.join(conversationId);
+
         console.log(`🔹 User ${userId} joined conversation ${conversationId}`);
     }
 }
