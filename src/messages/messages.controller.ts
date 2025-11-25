@@ -33,19 +33,26 @@ export class MessageController {
     async uploadVoice(
         @UploadedFile() file: Express.Multer.File,
         @Req() req: Request & { user: { sub: string } },
-        @Body() body: { conversationId: string },
+        @Body() body: { conversationId: string }
     ) {
         if (!file) throw new BadRequestException('No file uploaded');
-        const userId = req?.user.sub;
-        const conversationId = body.conversationId;
+        const senderId = req?.user.sub;
+        // const conversationId = body.conversationId;
         // Upload audio file to Cloudinary
         const uploadResult = await this.cloudinaryService.uploadFile(file);
         if (('secure_url' in uploadResult)) {
             // Save message record in database
-            return this.messageService.saveAudio(conversationId, uploadResult, userId)
-        }else{
+            const dto: MessageDto = {
+                conversationId: body.conversationId,
+                type: 'VOICE',
+                text: null,
+                mediaUrl: uploadResult.secure_url,
+            };
+            return this.messageService.sendMessage(dto, senderId)
+
+        } else {
             throw new BadRequestException('Cloudinary upload failed');
         }
-        
+
     }
 }

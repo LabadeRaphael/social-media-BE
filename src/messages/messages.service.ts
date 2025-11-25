@@ -7,12 +7,14 @@ export class MessageService {
   constructor(
     private readonly prisma: PrismaService
   ) { }
-  async sendMessage(dto: MessageDto, senderId?: string) {
+  async sendMessage(dto: MessageDto, senderId?: string, uploadResult?:any) {
     // create message with flexible type
     const message = await this.prisma.message.create({
+      
       data: {
         text: dto.text ?? null, // allow null for non-text messages
         type: dto.type,
+        mediaUrl:dto.mediaUrl ?? null,
         sender: { connect: { id: senderId } },
         conversation: { connect: { id: dto.conversationId } },
         isRead: false,
@@ -22,10 +24,12 @@ export class MessageService {
         text: true,
         type: true,
         conversationId:true,
+        mediaUrl:true,
         createdAt: true,
         senderId: true,
         isRead: true,
       },
+      
     });
 
     // update conversation’s lastMessageId
@@ -33,7 +37,6 @@ export class MessageService {
       where: { id: dto.conversationId },
       data: {
         lastMessageId: message.id
-
       },
     });
 
@@ -74,19 +77,33 @@ export class MessageService {
     return { updatedCount: result.count };
   }
 
-  async saveAudio(conversationId: string, uploadResult: any, userId: string,) {
-    const message = await this.prisma.message.create({
-      data: {
-        senderId: userId,
-        conversationId: conversationId,
-        type: 'VOICE',
-        mediaUrl: uploadResult.secure_url,
-      }
-    });
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { lastMessageId: message.id },
-    });
-  }
+  // async saveAudio(conversationId: string, uploadResult: any, userId: string,) {
+  //   console.log("uploadResult", uploadResult); // 🔍 debug
+
+  // if (!uploadResult?.secure_url) {
+  //   throw new Error("Audio upload failed, no URL returned");
+  // }
+  //   const message = await this.prisma.message.create({
+  //     data: {
+  //       senderId: userId,
+  //       conversationId: conversationId,
+  //       type: 'VOICE',
+  //       mediaUrl: uploadResult.secure_url,
+  //     }
+  //   });
+  //   console.log(message);
+    
+  //   await this.prisma.conversation.update({
+  //     where: { id: conversationId },
+  //     data: { lastMessageId: message.id },
+  //   });
+  // }
+  
+  
+  
+  
+  
+  
+  
 }
 

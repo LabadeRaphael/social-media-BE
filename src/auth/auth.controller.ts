@@ -10,6 +10,7 @@ import { CookiesService } from './cookies.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigType } from '@nestjs/config';
+import * as ms from 'ms';
 
 @Controller('auth')
 export class AuthController {
@@ -31,9 +32,10 @@ export class AuthController {
   async login(@Body() login: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.authService.login(login);
     const { accessToken, refreshToken} = tokens
-    this.cookieService.setAuthCookie(res, 'accessToken', accessToken, 1000 * 60 * 60); // 1h
-    this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, 7 * 24 * 60 * 60 * 1000); // 7d
-    // return { message: 'Login successful', status: true, access_token:token.accessToken, refreshToken:token.refreshToken};
+    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
+    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration);      
+    this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
+    this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs); // 7d
     return { message: 'Login successful', status: true};
   }
 
@@ -63,8 +65,11 @@ export class AuthController {
   async refreshToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const oldRefreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');
     console.log("refresh token", oldRefreshToken);
-    const { refreshToken, accessTokenExpireAt } = await this.authService.refreshToken(oldRefreshToken);
-    this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, 7 * 24 * 60 * 60 * 1000); // 7d
+    const { refreshToken, accessToken,accessTokenExpireAt } = await this.authService.refreshToken(oldRefreshToken);
+        const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
+    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration); 
+    this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
+    this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs);
     return { message: 'Refresh token generation successful', status: true,  accessTokenExpireAt };
   }
   @AllowAnonymous()
@@ -79,9 +84,7 @@ export class AuthController {
     return { message: 'Logout successful', status: true };
   }
   @Get('token-info')
-  async tokenInfo(@Req() req: Request) {
-    // 1️⃣ Get the access token from HttpOnly cookie
-    
+  tokenInfo(@Req() req: Request) {    
     const accessToken = this.cookieService.getAuthCookie(req, 'accessToken');
     
     if (!accessToken) {
@@ -89,7 +92,6 @@ export class AuthController {
     }
 
     try {
-      // 2️⃣ Verify the token is valid and not expired
       const decoded = this.jwtService.verify(accessToken, {
         secret: this.authConfiguration.jwtAccessSecret,
         audience: this.authConfiguration.jwtAudience,
@@ -100,7 +102,7 @@ export class AuthController {
         throw new UnauthorizedException('Invalid token payload');
       }
 
-      // 3️⃣ Convert expiration time from seconds to milliseconds
+      // Convert expiration time from seconds to milliseconds
       const accessTokenExpireAt = decoded.exp * 1000;
 
       return { accessTokenExpireAt };

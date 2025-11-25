@@ -6,20 +6,19 @@ export class MessageDto {
   @IsString()
   conversationId: string;
 
-  // @IsNotEmpty()
-  // @IsString()
-  // senderId: string;
+  
 
   // message text (for TEXT) or URL/path (for IMAGE/FILE/VOICE)
   @IsOptional()
   @IsString()
-  text?: string;
+  text?: string|null;
 
   @IsNotEmpty()
   @IsEnum(MessageType)
   type: MessageType;
   
-  @IsNotEmpty()
+
+  @IsOptional()
   @IsString()
   mediaUrl?: string|null;
 }
