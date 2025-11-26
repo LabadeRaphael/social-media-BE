@@ -40,12 +40,13 @@ export class MessageController {
         // const conversationId = body.conversationId;
         // Upload audio file to Cloudinary
         const uploadResult = await this.cloudinaryService.uploadFile(file);
-        if (('secure_url' in uploadResult)) {
+        if (('secure_url' in uploadResult)) {            
             // Save message record in database
             const dto: MessageDto = {
                 conversationId: body.conversationId,
                 type: 'VOICE',
                 text: null,
+                duration:uploadResult.duration,
                 mediaUrl: uploadResult.secure_url,
             };
             return this.messageService.sendMessage(dto, senderId)

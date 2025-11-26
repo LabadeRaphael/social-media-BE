@@ -158,7 +158,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
      */
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null },
+        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null, duration?:number|null },
         @ConnectedSocket() socket: Socket,
     ) {
         const senderId = (socket as any).userId;
@@ -171,6 +171,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
                 conversationId: data.conversationId,
                 type: data.type || 'TEXT', // use 'VOICE' if sent
                 mediaUrl: data.mediaUrl || null,
+                duration: data.duration || null,
             },
             senderId,
         );

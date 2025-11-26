@@ -7,14 +7,17 @@ export class MessageService {
   constructor(
     private readonly prisma: PrismaService
   ) { }
-  async sendMessage(dto: MessageDto, senderId?: string, uploadResult?:any) {
+  async sendMessage(dto: MessageDto, senderId?: string) {
     // create message with flexible type
+    console.log("current dto",dto);
+    
     const message = await this.prisma.message.create({
       
       data: {
         text: dto.text ?? null, // allow null for non-text messages
         type: dto.type,
         mediaUrl:dto.mediaUrl ?? null,
+        duration:dto.duration ?? null,
         sender: { connect: { id: senderId } },
         conversation: { connect: { id: dto.conversationId } },
         isRead: false,
@@ -25,6 +28,7 @@ export class MessageService {
         type: true,
         conversationId:true,
         mediaUrl:true,
+        duration:true,
         createdAt: true,
         senderId: true,
         isRead: true,

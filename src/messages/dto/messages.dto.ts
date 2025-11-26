@@ -21,4 +21,7 @@ export class MessageDto {
   @IsOptional()
   @IsString()
   mediaUrl?: string|null;
+  
+  @IsOptional()
+  duration?: number|null;
 }
