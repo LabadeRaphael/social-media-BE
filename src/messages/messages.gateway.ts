@@ -158,26 +158,47 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
      */
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null, duration?:number|null },
+        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null, duration?: number | null },
         @ConnectedSocket() socket: Socket,
     ) {
         const senderId = (socket as any).userId;
         if (!senderId) return socket.emit('error', 'Unauthorized');
         console.log("sendMessageData", data);
-
-        const message = await this.messageService.sendMessage(
-            {
+        let message;
+        if (data.type === 'TEXT') {
+            console.log("Mr text");
+            
+            message = await this.messageService.sendMessage({
                 text: data.text,
+                type: 'TEXT',
+                conversationId: data.conversationId
+            }, senderId);
+        } else {
+             console.log("Mr voice");
+            message = {
+                text: null,
+                type: 'VOICE',
+                mediaUrl: data.mediaUrl,
+                duration: data.duration,
                 conversationId: data.conversationId,
-                type: data.type || 'TEXT', // use 'VOICE' if sent
-                mediaUrl: data.mediaUrl || null,
-                duration: data.duration || null,
-            },
-            senderId,
-        );
+                senderId,
+            };
+
+        }
+        // const message = await this.messageService.sendMessage(
+        //     {
+        //         text: data.text,
+        //         conversationId: data.conversationId,
+        //         type: data.type || 'TEXT', // use 'VOICE' if sent
+        //         mediaUrl: data.mediaUrl || null,
+        //         duration: data.duration || null,
+        //     },
+        //     senderId,
+        // );
+
 
         // ✅ 2. Send to everyone in the conversation room
-        this.server.to(data.conversationId).emit('receive_message', message);
+        // this.server.to(data.conversationId).emit('receive_message', message);
 
         // ✅ 3. Send directly to the receiver if they’re online
         const receiverSocketId = this.onlineUsers.get(data.receiverId);
