@@ -185,26 +185,15 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             };
 
         }
-        // const message = await this.messageService.sendMessage(
-        //     {
-        //         text: data.text,
-        //         conversationId: data.conversationId,
-        //         type: data.type || 'TEXT', // use 'VOICE' if sent
-        //         mediaUrl: data.mediaUrl || null,
-        //         duration: data.duration || null,
-        //     },
-        //     senderId,
-        // );
-
-
-        // ✅ 2. Send to everyone in the conversation room
-        // this.server.to(data.conversationId).emit('receive_message', message);
-
-        // ✅ 3. Send directly to the receiver if they’re online
         const receiverSocketId = this.onlineUsers.get(data.receiverId);
         console.log("receiverId", receiverSocketId);
-
+        
+        const senderSocketId = socket.id;
+        console.log("socket",senderSocketId);
+        
         if (receiverSocketId) {
+            console.log("sender",senderId);
+            this.server.to(senderSocketId).emit('receive_message', message);
             this.server.to(receiverSocketId).emit('receive_message', message);
             console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
         } else {
@@ -233,7 +222,6 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         @MessageBody() data: { conversationId: string; senderId: string },
         @ConnectedSocket() client: Socket
     ) {
-        // console.log("Typing", data.senderId);
 
         // broadcast to others in the same conversation
         client.to(data.conversationId).emit("user_typing", {
