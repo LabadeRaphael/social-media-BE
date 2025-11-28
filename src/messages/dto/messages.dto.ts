@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { MessageType } from '@prisma/client';
 
 export class MessageDto {
@@ -17,11 +17,24 @@ export class MessageDto {
   @IsEnum(MessageType)
   type: MessageType;
   
-
+  // for voice 
   @IsOptional()
   @IsString()
   mediaUrl?: string|null;
   
   @IsOptional()
   duration?: number|null;
+  
+  // for document
+  @IsString()
+  @IsOptional()
+  fileName?: string | null;
+  
+  @IsNumber()
+  @IsOptional()
+  fileSize?: number | null;
+  
+  @IsString()
+  @IsOptional()
+  fileType?: string | null;
 }

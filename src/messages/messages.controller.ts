@@ -56,4 +56,37 @@ export class MessageController {
         }
 
     }
+    @Post('messages/document')
+@UseInterceptors(FileInterceptor('file', multerConfig))
+async uploadDocument(
+  @UploadedFile() file: Express.Multer.File,
+  @Req() req: Request & { user: { sub: string } },
+  @Body() body: { conversationId: string }
+) {
+  if (!file) {
+    throw new BadRequestException('No file uploaded');
+  }
+
+  const senderId = req.user.sub;
+
+  // Upload file to Cloudinary or S3
+  const uploadResult = await this.cloudinaryService.uploadFile(file);
+
+  if (!('secure_url' in uploadResult)) {
+    throw new BadRequestException('Cloudinary upload failed');
+  }
+
+  const dto: MessageDto = {
+    conversationId: body.conversationId,
+    type: 'DOCUMENT',
+    text: null,
+    mediaUrl: uploadResult.secure_url,
+    fileName: file.originalname,
+    fileSize: file.size,
+    fileType: file.mimetype,
+  };
+
+  return this.messageService.sendMessage(dto, senderId);
+}
+
 }

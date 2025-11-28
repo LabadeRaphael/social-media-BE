@@ -158,7 +158,11 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
      */
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: { text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE'; mediaUrl?: string | null, duration?: number | null },
+        @MessageBody() data: {
+            text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE' | 'DOCUMENT'; mediaUrl?: string | null, duration?: number | null, fileName?: string | null;
+            fileSize?: number | null;
+            fileType?: string | null;
+        },
         @ConnectedSocket() socket: Socket,
     ) {
         const senderId = (socket as any).userId;
@@ -167,32 +171,45 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         let message;
         if (data.type === 'TEXT') {
             console.log("Mr text");
-            
+
             message = await this.messageService.sendMessage({
                 text: data.text,
                 type: 'TEXT',
                 conversationId: data.conversationId
             }, senderId);
-        } else {
-             console.log("Mr voice");
+        } else if (data.type === 'VOICE') {
+            console.log("Mr voice");
             message = {
                 text: null,
                 type: 'VOICE',
                 mediaUrl: data.mediaUrl,
                 duration: data.duration,
+
                 conversationId: data.conversationId,
                 senderId,
             };
 
         }
+        // DOCUMENT
+        else if (data.type === 'DOCUMENT') {
+            message = {
+                type: 'DOCUMENT',
+                mediaUrl: data.mediaUrl,
+                fileName: data.fileName,
+                fileSize: data.fileSize,
+                fileType: data.fileType,
+                conversationId: data.conversationId,
+                senderId,
+            };
+        }
         const receiverSocketId = this.onlineUsers.get(data.receiverId);
         console.log("receiverId", receiverSocketId);
-        
+
         const senderSocketId = socket.id;
-        console.log("socket",senderSocketId);
-        
+        console.log("socket", senderSocketId);
+
         if (receiverSocketId) {
-            console.log("sender",senderId);
+            console.log("sender", senderId);
             this.server.to(senderSocketId).emit('receive_message', message);
             this.server.to(receiverSocketId).emit('receive_message', message);
             console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
@@ -220,11 +237,11 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @SubscribeMessage("typing")
     handleTyping(
         @MessageBody() data: { conversationId: string; senderId: string },
-        @ConnectedSocket() client: Socket
+        @ConnectedSocket() socket: Socket
     ) {
 
         // broadcast to others in the same conversation
-        client.to(data.conversationId).emit("user_typing", {
+        socket.to(data.conversationId).emit("user_typing", {
             conversationId: data.conversationId,
             senderId: data.senderId,
         });
@@ -233,18 +250,15 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @SubscribeMessage("stop_typing")
     handleStopTyping(
         @MessageBody() data: { conversationId: string; senderId: string },
-        @ConnectedSocket() client: Socket
+        @ConnectedSocket() socket: Socket
     ) {
-        client.to(data.conversationId).emit("user_stop_typing", {
+        socket.to(data.conversationId).emit("user_stop_typing", {
             conversationId: data.conversationId,
             senderId: data.senderId,
         });
     }
 
 
-    /**
-     * Handle joining conversation rooms
-     */
     @SubscribeMessage('join_conversation')
     handleJoinConversation(
         @MessageBody() conversationId: string,

@@ -63,6 +63,9 @@ model Message {
   text           String?
   mediaUrl       String?
   duration       Int?
+  fileName      String?
+  fileSize      Int?
+  fileType      String?
   type           MessageType  @default(TEXT)
   createdAt      DateTime     @default(now())
   isRead        Boolean  @default(false) // 👈 Add this line
@@ -91,8 +94,7 @@ model PasswordResetToken {
 enum MessageType {
   TEXT
   VOICE
-  IMAGE
-  FILE
+  DOCUMENT
 }
 
 

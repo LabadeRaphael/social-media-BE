@@ -260,6 +260,8 @@ return await this.prisma.message.findMany({
         text: true,
         type:true,
         mediaUrl:true,
+        fileName:true,
+        fileSize:true,
         createdAt: true,
         isRead: true,
         sender: { select: { id: true, userName: true, email: true } },
