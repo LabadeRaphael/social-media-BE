@@ -85,11 +85,30 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
     // Map userId <-> socketId
     private onlineUsers = new Map<string, string>();
-
+    private lastPing = new Map<string, number>();
     constructor(
         private readonly messageService: MessageService,
         private readonly jwtService: JwtService, // ✅ use existing JwtService
-    ) { }
+    ) {
+        setInterval(() => {
+            const now = Date.now();
+            const timeout = 30000; // 30 seconds of inactivity = offline
+            
+            for (const [userId, last] of this.lastPing.entries()) {
+                if (now - last > timeout) {
+                    console.log("PassBoundary");
+                    
+                    // Remove user
+                    this.onlineUsers.delete(userId);
+                    this.lastPing.delete(userId);
+                }
+            }
+
+            // Emit updated online users list to all clients
+            this.server.emit('online_users', Array.from(this.onlineUsers.keys()));
+        }, 10000); // run every 10 seconds
+
+    }
 
     /**
      * Called when a client connects
@@ -119,7 +138,9 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             // ✅ 4. Store mapping
             this.onlineUsers.set(userId, socket.id);
             (socket as any).userId = userId; // attach userId to socket for reuse
-
+            this.lastPing.set(userId, Date.now());
+            console.log(this.lastPing);
+            
             console.log("✅ Connected users:", Array.from(this.onlineUsers.keys()));
 
             // ✅ Always emit the full updated list
@@ -152,6 +173,14 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             // console.log(`👋 User ${userId} disconnected`);
         }
     }
+    @SubscribeMessage('heartbeat')
+    handleHeartbeat(socket: Socket) {
+        const userId = (socket as any).userId;
+        if (userId) {
+            this.lastPing.set(userId, Date.now()); // 🔹 update lastPing
+        }
+    }
+
 
     /**
      * Handle sending messages
