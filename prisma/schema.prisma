@@ -24,8 +24,9 @@ model User {
   resetTokens   PasswordResetToken[]
   // Relations
   messages       Message[]       @relation("UserMessages")       // one user → many messages
-  participants   Participant[]   // changed line
-  // conversations  Conversation[]  @relation("UserConversations")  // user can have many conversations
+  participants   Participant[]  
+  blockedUsers User[]    @relation("UserBlocks")
+  blockedBy    User[]    @relation("UserBlocks")
 }
 
 model RefreshToken {

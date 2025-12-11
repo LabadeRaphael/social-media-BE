@@ -65,34 +65,34 @@ export class UsersService {
     });
   }
   async saveResetPswToken(userId: string, hashedPswToken: string, expiresAt: Date) {
-     return this.prisma.passwordResetToken.create({
+    return this.prisma.passwordResetToken.create({
       data: {
         hashedPswToken,
         userId,
         expiresAt
-       }, 
+      },
     });
   }
 
-async findResetToken(userId:string) {
-  console.log("userId",userId);
-  
-  return this.prisma.passwordResetToken.findFirst({
-    where: { userId, used:false },
-  });
-}
+  async findResetToken(userId: string) {
+    console.log("userId", userId);
+
+    return this.prisma.passwordResetToken.findFirst({
+      where: { userId, used: false },
+    });
+  }
 
 
   async updatePassword(userId: string, hashedPassword: string) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword},
+      data: { password: hashedPassword },
     });
   }
-  async updateTokenState( userId:string ) {
+  async updateTokenState(userId: string) {
     return this.prisma.passwordResetToken.updateMany({
-      where: {userId:userId},
-      data: { used: true},
+      where: { userId: userId },
+      data: { used: true },
     });
   }
 
@@ -161,5 +161,28 @@ async findResetToken(userId:string) {
       },
     });
   }
+  async blockUser(userId: string, targetUserId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        blockedUsers: {
+          connect: { id: targetUserId },
+        },
+      },
+    });
+
+  }
+  async unblockUser(userId: string, targetUserId: string) {
+  return await this.prisma.user.update({
+    where: { id: userId },
+    data: {
+      blockedUsers: {
+        disconnect: { id: targetUserId },
+      },
+    },
+  });
+}
+
+
 }
 
