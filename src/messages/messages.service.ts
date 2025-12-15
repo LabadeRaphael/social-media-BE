@@ -7,9 +7,66 @@ export class MessageService {
   constructor(
     private readonly prisma: PrismaService
   ) { }
+  async canSendMessage(conversationId: string, senderId: string) {
+  const conversation = await this.prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              blockedUsers: { select: { id: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!conversation) {
+    return { allowed: false, reason: 'CONVERSATION_NOT_FOUND' };
+  }
+
+  const senderParticipant = conversation.participants.find(
+    p => p.user.id === senderId
+  );
+
+  if (!senderParticipant) {
+    return { allowed: false, reason: 'NOT_PARTICIPANT' };
+  }
+
+  const receiverParticipant = conversation.participants.find(
+    p => p.user.id !== senderId
+  );
+
+  if (!receiverParticipant) {
+    return { allowed: false, reason: 'INVALID_CONVERSATION' };
+  }
+
+  const sender = senderParticipant.user;
+  const receiver = receiverParticipant.user;
+  console.log(sender,receiver);
+    
+  if (receiver.blockedUsers.some(u => u.id === senderId)) {
+    return { allowed: false, reason: 'BLOCKED_BY_RECEIVER' };
+  }
+
+  if (sender.blockedUsers.some(u => u.id === receiver.id)) {
+    return { allowed: false, reason: 'BLOCKED_BY_SENDER' };
+  }
+
+  return {
+    allowed: true,
+    conversation,
+    sender,
+    receiver,
+  };
+}
+
   async sendMessage(dto: MessageDto, senderId?: string) {
     // create message with flexible type
-    console.log("current dto", dto);
+    
 
     const message = await this.prisma.message.create({
 
@@ -62,7 +119,7 @@ export class MessageService {
 
 
 
-    return message;
+    return message ;
   }
 
   // 4️⃣ Add function to mark all messages as read for the receiver

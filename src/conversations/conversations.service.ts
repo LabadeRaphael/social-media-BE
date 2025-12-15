@@ -228,27 +228,28 @@ export class ConversationService {
     });
   }
 
-  async getConversation(conversationId: string) {
-    return this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: {
-        participants: {
-          include: {
-            user: { select: { id: true, email: true, userName: true } },
-          },
-        },
-        messages: {
-          select: { id: true, text: true, createdAt: true, senderId: true },
-          orderBy: { createdAt: 'asc' },
-        },
-        lastMessage: {
-          select: { id: true, text: true, createdAt: true, senderId: true },
-        },
-      },
-    });
-  }
+  // async getConversation(conversationId: string) {
+  //   return this.prisma.conversation.findUnique({
+  //     where: { id: conversationId },
+  //     include: {
+  //       participants: {
+  //         include: {
+  //           user: { select: { id: true, email: true, userName: true } },
+  //         },
+  //       },
+  //       messages: {
+  //         select: { id: true, text: true, createdAt: true, senderId: true },
+  //         orderBy: { createdAt: 'asc' },
+  //       },
+        
+  //       lastMessage: {
+  //         select: { id: true, text: true, createdAt: true, senderId: true },
+  //       },
+  //     },
+  //   });
+  // }
   // conversation.service.ts
-  async getMessages(conversationId: string, skip: number, take: number) {
+async getMessages(conversationId: string, skip: number, take: number) {
   
 return await this.prisma.message.findMany({
       where: { conversationId },

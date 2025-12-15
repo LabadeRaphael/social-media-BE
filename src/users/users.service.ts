@@ -161,7 +161,10 @@ export class UsersService {
       },
     });
   }
-  async blockUser(userId: string, targetUserId: string) {
+  async blockUser(userId?: string, targetUserId?: string) {
+    console.log("reach here");
+    console.log("From block",userId,targetUserId);
+    
     return this.prisma.user.update({
       where: { id: userId },
       data: {

@@ -25,7 +25,7 @@ export class UsersController {
   }
 
   @Post('block/:id')
-  async blockUser(@Req() req, @Param('id') targetUserId: string) {
+  async blockUser(@Req() req:Request & { user?: { sub: string } }, @Param('id') targetUserId: string) {
     const userId = req.user?.sub;
     if (userId === targetUserId) throw new BadRequestException("You can't block yourself");
     return this.userService.blockUser(userId, targetUserId);

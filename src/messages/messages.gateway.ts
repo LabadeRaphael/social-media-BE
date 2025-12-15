@@ -93,11 +93,11 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         setInterval(() => {
             const now = Date.now();
             const timeout = 30000; // 30 seconds of inactivity = offline
-            
+
             for (const [userId, last] of this.lastPing.entries()) {
                 if (now - last > timeout) {
                     console.log("PassBoundary");
-                    
+
                     // Remove user
                     this.onlineUsers.delete(userId);
                     this.lastPing.delete(userId);
@@ -140,7 +140,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             (socket as any).userId = userId; // attach userId to socket for reuse
             this.lastPing.set(userId, Date.now());
             console.log(this.lastPing);
-            
+
             console.log("✅ Connected users:", Array.from(this.onlineUsers.keys()));
 
             // ✅ Always emit the full updated list
@@ -198,7 +198,29 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
         if (!senderId) return socket.emit('error', 'Unauthorized');
         console.log("sendMessageData", data);
         let message;
-        if (data.type === 'TEXT') {
+        const result = await this.messageService.canSendMessage(
+            data.conversationId,
+            senderId
+        );
+        console.log(result);
+        
+        if (!result.allowed) {
+            console.log("djjdjd");
+            console.log(result.reason);
+            
+            return socket.emit('message_blocked', result.reason);
+        }
+        // const receiver = await this.userM.findById(receiverId);
+        // if (receiver.blockedUsers.includes(senderId)) {
+        //     throw new ForbiddenException("You cannot message this user");
+        // }
+
+        // const sender = await this.userModel.findById(senderId);
+
+        // if (sender.blockedUsers.includes(receiverId)) {
+        //     throw new ForbiddenException("You blocked this user");
+        // }
+        else if (data.type === 'TEXT') {
             console.log("Mr text");
 
             message = await this.messageService.sendMessage({

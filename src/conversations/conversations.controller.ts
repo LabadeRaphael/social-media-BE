@@ -26,11 +26,11 @@ export class ConversationController {
     return this.conversationService.getUserConversations(userId);
   }
 
-  @Get('conversations/:conversationId')
+  // @Get('conversations/:conversationId')
   
-  async getConversation(@Param('conversationId') conversationId: string) {
-    return this.conversationService.getConversation(conversationId);
-  }
+  // async getConversation(@Param('conversationId') conversationId: string) {
+  //   return this.conversationService.getConversation(conversationId);
+  // }
   // conversation.controller.ts
 @Get('conversations/:conversationId/messages')
 async getMessages(
