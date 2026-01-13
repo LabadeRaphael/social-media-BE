@@ -158,13 +158,14 @@ export class UsersService {
         id: true,
         email: true,
         userName: true,
+        blockedUsers: { select: { id: true } },
       },
     });
   }
   async blockUser(userId?: string, targetUserId?: string) {
     console.log("reach here");
-    console.log("From block",userId,targetUserId);
-    
+    console.log("From block", userId, targetUserId);
+
     return this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -175,16 +176,31 @@ export class UsersService {
     });
 
   }
-  async unblockUser(userId: string, targetUserId: string) {
-  return await this.prisma.user.update({
-    where: { id: userId },
-    data: {
-      blockedUsers: {
-        disconnect: { id: targetUserId },
+  async unblockUser(userId?: string, blockedUserId?: string) {
+    const isBlocked = await this.prisma.user.findFirst({
+      where: { id: userId, blockedUsers: { some: { id: blockedUserId } } },
+    });
+
+    if (!isBlocked) {
+      console.log("user not block");
+      
+      return { success: false, message: 'User was not blocked' };
+    }
+
+    return await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        blockedUsers: {
+          disconnect: { id: blockedUserId },
+        },
       },
-    },
-  });
-}
+      select: {
+        id: true,
+        blockedUsers: { select: { id: true } },
+      },
+
+    });
+  }
 
 
 }

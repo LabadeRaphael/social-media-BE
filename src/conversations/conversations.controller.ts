@@ -54,5 +54,12 @@ async resetUnreadCount(
   console.log("user id",userId);
   return this.conversationService.resetUnreadCount(conversationId, userId);
 }
+// @Post('conversations/:conversationId/messages')
+// async clearMessages(
+//   @Param('conversationId') conversationId: string,
+// ) {
+
+//   return this.conversationService.clearMessages(conversationId);
+// }
 
 }

@@ -202,13 +202,14 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
             data.conversationId,
             senderId
         );
-        console.log(result);
+        console.log(!result.allowed);
         
         if (!result.allowed) {
-            console.log("djjdjd");
+            // console.log("djjdjd");
             console.log(result.reason);
-            
             return socket.emit('message_blocked', result.reason);
+            // return result
+            // return socket.emit('message_blocked', result.reason);
         }
         // const receiver = await this.userM.findById(receiverId);
         // if (receiver.blockedUsers.includes(senderId)) {

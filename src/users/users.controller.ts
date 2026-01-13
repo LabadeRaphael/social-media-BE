@@ -30,5 +30,11 @@ export class UsersController {
     if (userId === targetUserId) throw new BadRequestException("You can't block yourself");
     return this.userService.blockUser(userId, targetUserId);
   }
+  @Post('unblock/:id')
+  async unblockUser(@Req() req:Request & { user?: { sub: string } }, @Param('id') blockedUserId: string) {
+    const userId = req.user?.sub;
+    if (userId === blockedUserId) throw new BadRequestException("You can't block yourself not to talk of unblocking");
+    return this.userService.unblockUser(userId, blockedUserId);
+  }
 
 }
