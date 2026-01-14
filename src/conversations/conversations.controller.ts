@@ -37,9 +37,10 @@ async getMessages(
   @Param('conversationId') conversationId: string,
   @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
   @Query('take', new DefaultValuePipe(980), ParseIntPipe) take: number,
+  @Req() req:Request & { user: { sub: string } }
 ) {
-
-  return this.conversationService.getMessages(conversationId, skip, take);
+  const userId = req.user.sub;
+  return this.conversationService.getMessages(conversationId, userId, skip, take);
 }
 @Patch('conversations/:conversationId/unread/reset')
 async resetUnreadCount(
@@ -54,12 +55,13 @@ async resetUnreadCount(
   console.log("user id",userId);
   return this.conversationService.resetUnreadCount(conversationId, userId);
 }
-// @Post('conversations/:conversationId/messages')
-// async clearMessages(
-//   @Param('conversationId') conversationId: string,
-// ) {
-
-//   return this.conversationService.clearMessages(conversationId);
-// }
+@Post('conversations/:conversationId/clear-chat')
+async clearChat(
+  @Param('conversationId') conversationId: string,
+  @Req() req:Request & { user:{sub:string}},
+) {
+  const userId = req.user.sub
+  return this.conversationService.clearChat(conversationId, userId);
+}
 
 }

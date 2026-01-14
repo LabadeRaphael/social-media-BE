@@ -140,7 +140,7 @@ export class ConversationService {
   //     data: {
   //       participants: {
   //         create: conversation.participants.map((userId) => ({
-            
+
   //           user: { connect: { id: userId } },
   //         })),
   //       },
@@ -158,52 +158,52 @@ export class ConversationService {
 
   // }
   async createConversation(conversation: ConversationDto) {
-  const participantIds = conversation.participants;
+    const participantIds = conversation.participants;
 
-  // ✅ Check if a conversation already exists between these two users
-  const existing = await this.prisma.conversation.findFirst({
-    where: {
-      AND: participantIds.map((userId) => ({
-        participants: { some: { userId } },
-      })),
-      // optional: if you want *only* 1-on-1 chats, ensure there are exactly 2
-      participants: { every: { userId: { in: participantIds } } },
-    },
-    include: {
-      participants: {
-        include: {
-          user: {
-            select: { id: true, email: true, userName: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (existing) return existing;
-
-  // ✅ Create a new conversation with connected participants
-  const newConversation = await this.prisma.conversation.create({
-    data: {
-      participants: {
-        create: participantIds.map((userId) => ({
-          user: { connect: { id: userId } },
+    // ✅ Check if a conversation already exists between these two users
+    const existing = await this.prisma.conversation.findFirst({
+      where: {
+        AND: participantIds.map((userId) => ({
+          participants: { some: { userId } },
         })),
+        // optional: if you want *only* 1-on-1 chats, ensure there are exactly 2
+        participants: { every: { userId: { in: participantIds } } },
       },
-    },
-    include: {
-      participants: {
-        include: {
-          user: {
-            select: { id: true, email: true, userName: true, createdAt: true },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: { id: true, email: true, userName: true },
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  return newConversation;
-}
+    if (existing) return existing;
+
+    // ✅ Create a new conversation with connected participants
+    const newConversation = await this.prisma.conversation.create({
+      data: {
+        participants: {
+          create: participantIds.map((userId) => ({
+            user: { connect: { id: userId } },
+          })),
+        },
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: { id: true, email: true, userName: true, createdAt: true },
+            },
+          },
+        },
+      },
+    });
+
+    return newConversation;
+  }
 
 
   async getUserConversations(userId?: string) {
@@ -215,11 +215,12 @@ export class ConversationService {
       },
       include: {
         participants: {
-            select:{
-              unreadCount: true,
-              user: {
-                select: { id: true, email: true, userName: true, createdAt: true,
-                },
+          select: {
+            unreadCount: true,
+            user: {
+              select: {
+                id: true, email: true, userName: true, createdAt: true,
+              },
             }
           }
         },
@@ -241,7 +242,7 @@ export class ConversationService {
   //         select: { id: true, text: true, createdAt: true, senderId: true },
   //         orderBy: { createdAt: 'asc' },
   //       },
-        
+
   //       lastMessage: {
   //         select: { id: true, text: true, createdAt: true, senderId: true },
   //       },
@@ -249,20 +250,34 @@ export class ConversationService {
   //   });
   // }
   // conversation.service.ts
-async getMessages(conversationId: string, skip: number, take: number) {
-  
-return await this.prisma.message.findMany({
-      where: { conversationId },
+  async getMessages(conversationId: string,  userId: string, skip: number, take: number) {
+    const participant = await this.prisma.participant.findUnique({
+    where: {
+      userId_conversationId: {
+        userId,
+        conversationId,
+      },
+    },
+   });
+    return await this.prisma.message.findMany({
+      where: { 
+        conversationId,
+        ...(participant?.clearedAt && {
+          createdAt: {
+            gt: participant.clearedAt,
+          },
+        }),
+      },
       orderBy: { createdAt: 'asc' }, // latest first
       skip,
       take,
       select: {
         id: true,
         text: true,
-        type:true,
-        mediaUrl:true,
-        fileName:true,
-        fileSize:true,
+        type: true,
+        mediaUrl: true,
+        fileName: true,
+        fileSize: true,
         createdAt: true,
         isRead: true,
         sender: { select: { id: true, userName: true, email: true } },
@@ -270,18 +285,39 @@ return await this.prisma.message.findMany({
     });
   }
   async resetUnreadCount(conversationId: string, userId?: string) {
-  console.log("the convffd", conversationId);
-  
-  return this.prisma.participant.updateMany({
-    where: { conversationId, userId },
-    data: { unreadCount: 0 },
-    
-  });
-  // console.log(  await this.prisma.participant.updateMany({
-  //   where: { conversationId, userId },
-  //   data: { unreadCount: 0 },
-    
-  // }));
+    console.log("the convffd", conversationId);
+
+    return this.prisma.participant.updateMany({
+      where: { conversationId, userId },
+      data: { unreadCount: 0 },
+
+    });
+    // console.log(  await this.prisma.participant.updateMany({
+    //   where: { conversationId, userId },
+    //   data: { unreadCount: 0 },
+
+    // }));
+  }
+  async clearChat(conversationId: string, userId: string) {
+    const now = new Date();
+
+    const result = await this.prisma.participant.updateMany({
+      where: {
+        conversationId,
+        userId,
+      },
+      data: {
+        clearedAt: now,
+        unreadCount: 0,
+      },
+    });
+
+    return {
+      success: result.count > 0,
+      clearedAt: now,
+    };
+  }
+
 }
-}
+
 
