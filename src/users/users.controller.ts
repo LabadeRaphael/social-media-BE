@@ -1,9 +1,18 @@
 import { UsersService } from './users.service';
-import { BadRequestException, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
-
+import { BadRequestException, Controller, Get, Param, Post, Query, Req, UseInterceptors,
+  UploadedFile,
+  Body,
+  Put, } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { multerConfig } from 'src/config/multer.config';
+import { UpdateUserDto } from './dto/update-user.dto';
 @Controller('users')
 export class UsersController {
-  constructor(private userService: UsersService) { }
+  constructor(
+    private readonly userService: UsersService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) { }
 
   @Get('search')
   async getUserName(
@@ -37,4 +46,40 @@ export class UsersController {
     return this.userService.unblockUser(userId, blockedUserId);
   }
 
+
+  @Put('update')
+  @UseInterceptors(FileInterceptor('avatar', multerConfig))
+  async updateUser(
+    @Req() req: Request & { user: { sub: string } }, // user id from JWT
+    @Body() body: UpdateUserDto,
+    @UploadedFile() avatar?: Express.Multer.File,
+  ) {
+    const userId = req.user.sub;
+
+    // 1️⃣ Validate uploaded file
+    if (avatar && !avatar.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed for avatar');
+    }
+
+    // 2️⃣ Optionally upload to Cloudinary
+    let avatarUrl: string | undefined;
+    if (avatar) {
+      const uploadResult = await this.cloudinaryService.uploadFile(avatar);
+      if (!('secure_url' in uploadResult)) {
+        throw new BadRequestException('Cloudinary upload failed');
+      }
+      avatarUrl = uploadResult.secure_url;
+    }
+    return this.userService.updateUser(
+      userId,
+      body,
+      avatarUrl
+     
+      
+    )
+    // 3️⃣ Update user in DB
+   
+
+  }
 }
+

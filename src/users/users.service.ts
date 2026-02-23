@@ -4,7 +4,10 @@ import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { RegisterDto } from 'src/auth/dto/register.dto';
-
+ select: {
+        id: true,
+        email: true,
+        userName: true,import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
@@ -200,6 +203,35 @@ export class UsersService {
       },
 
     });
+  }
+  async updateUser(
+    userId: string,
+    data: { userName?: string; password?: string;},
+    avatarUrl?: string ,
+  ) {
+    const updateData: any = {};
+
+    // Update username if provided
+    if (data.userName) updateData.userName = data.userName;
+
+    // Hash and update password if provided
+    if (data.password) {
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      updateData.password = hashedPassword;
+    }
+
+    // Update avatar URL if uploaded
+    if (avatarUrl) updateData.avatarUrl = avatarUrl;
+
+    // Update the user in the database
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      
+    });
+    console.log("The update USER",updatedUser);
+    
+    return updatedUser;
   }
 
 
