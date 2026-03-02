@@ -1,13 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { RegisterDto } from 'src/auth/dto/register.dto';
- select: {
-        id: true,
-        email: true,
-        userName: true,import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt';
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
@@ -31,9 +29,13 @@ export class UsersService {
 
   async login(login: LoginDto) {
     const { email } = login;
-    return this.prisma.user.findUnique({
+   const user = await this.prisma.user.findUnique({
       where: { email },
     });
+    if (user?.isDeleted) {
+      throw new ForbiddenException('Account has been deleted, kindly recover your it');
+    }
+    return user
   }
 
   async saveRefreshToken(userId: string, token: string, expiresAt: Date) {
@@ -227,13 +229,50 @@ export class UsersService {
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: updateData,
-      
+      select:{
+        id:true,
+        userName: true,
+        email:true,
+        
+      }
     });
     console.log("The update USER",updatedUser);
-    
+
     return updatedUser;
   }
+  
+   async softDeleteUser(userId: string, password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    console.log(user);
+    
+    if (!user) throw new ForbiddenException('User not found');
 
+    const passwordMatches = await bcrypt.compare(password, user.password);
+    if (!passwordMatches) throw new ForbiddenException('Incorrect password');
+
+    // Soft delete
+    const deleteAccount = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+      select:{
+        id:true,
+        userName: true,
+        email:true,
+        isDeleted:true
+      }
+      
+    });
+    console.log(deleteAccount);
+    
+    return deleteAccount
+
+
+  }
 
 }
 

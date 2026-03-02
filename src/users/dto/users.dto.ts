@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsString, IsNotEmpty, MinLength } from 'class-validator';
 
 export class UsersDto {
@@ -13,5 +14,6 @@ export class UsersDto {
   @IsString({ message: 'Password must be a string value.' })
   @IsNotEmpty({ message: 'Password must not be a empty.' })
   @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @Transform(({ value }) => String(value).trim())
   password: string;
 }

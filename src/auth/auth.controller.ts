@@ -66,13 +66,13 @@ export class AuthController {
     const oldRefreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');
     console.log("refresh token", oldRefreshToken);
     const { refreshToken, accessToken,accessTokenExpireAt } = await this.authService.refreshToken(oldRefreshToken);
-        const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
+    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
     const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration); 
     this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
     this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs);
     return { message: 'Refresh token generation successful', status: true,  accessTokenExpireAt };
   }
-  @AllowAnonymous()
+  // @AllowAnonymous()
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');

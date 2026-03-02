@@ -2,11 +2,13 @@ import { UsersService } from './users.service';
 import { BadRequestException, Controller, Get, Param, Post, Query, Req, UseInterceptors,
   UploadedFile,
   Body,
-  Put, } from '@nestjs/common';
+  Put,
+  Delete, } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { multerConfig } from 'src/config/multer.config';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 @Controller('users')
 export class UsersController {
   constructor(
@@ -50,7 +52,7 @@ export class UsersController {
   @Put('update')
   @UseInterceptors(FileInterceptor('avatar', multerConfig))
   async updateUser(
-    @Req() req: Request & { user: { sub: string } }, // user id from JWT
+    @Req() req: Request & { user: { sub: string } }, 
     @Body() body: UpdateUserDto,
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
@@ -80,6 +82,14 @@ export class UsersController {
     // 3️⃣ Update user in DB
    
 
+  }
+  @Delete('delete-account')
+  async deleteAccount(
+    @Req() req: Request & { user: { sub: string } }, 
+    @Body() dto: DeleteAccountDto) {
+    const userId = req.user.sub;
+    await this.userService.softDeleteUser(userId, dto.password);
+    return { message: 'Account deletion successful.', status: true };
   }
 }
 
