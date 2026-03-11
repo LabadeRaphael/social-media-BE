@@ -32,9 +32,9 @@ export class UsersService {
    const user = await this.prisma.user.findUnique({
       where: { email },
     });
-    if (user?.isDeleted) {
-      throw new ForbiddenException('Account has been deleted, kindly recover your it');
-    }
+    // if (user?.isDeleted) {
+    //   throw new ForbiddenException('Account has been deleted, kindly recover your it');
+    // }
     return user
   }
 
@@ -163,6 +163,7 @@ export class UsersService {
         id: true,
         email: true,
         userName: true,
+        avatarUrl:true,
         blockedUsers: { select: { id: true } },
       },
     });
@@ -208,13 +209,19 @@ export class UsersService {
   }
   async updateUser(
     userId: string,
-    data: { userName?: string; password?: string;},
-    avatarUrl?: string ,
+    data: {userName?: string; password?: string, avatar?: string,  re_auth_psw:string;},
   ) {
     const updateData: any = {};
-
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+        if (!user) throw new ForbiddenException('User not found');
+        console.log(user,data.re_auth_psw);
+        
     // Update username if provided
     if (data.userName) updateData.userName = data.userName;
+    const passwordMatches = await bcrypt.compare(data.re_auth_psw, user.password);
+    if (!passwordMatches) throw new ForbiddenException('Incorrect password');
 
     // Hash and update password if provided
     if (data.password) {
@@ -223,7 +230,7 @@ export class UsersService {
     }
 
     // Update avatar URL if uploaded
-    if (avatarUrl) updateData.avatarUrl = avatarUrl;
+    if (data.avatar) updateData.avatar = data.avatar;
 
     // Update the user in the database
     const updatedUser = await this.prisma.user.update({
