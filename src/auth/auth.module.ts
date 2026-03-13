@@ -7,6 +7,7 @@ import authConfig from 'src/config/auth.config';
 // import { JwtModule } from '@nestjs/jwt';
 import { JwtModule, JwtModuleAsyncOptions } from '@nestjs/jwt';
 import { CookiesService } from './cookies.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [ConfigModule.forFeature(authConfig)],
   inject: [authConfig.KEY],

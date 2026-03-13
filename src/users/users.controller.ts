@@ -64,7 +64,6 @@ export class UsersController {
     // if (!re_auth_psw) {
     //   throw new BadRequestException('Current password is required');
     // }
-     let avatarUrl: string | undefined;
     if (avatar && !avatar.mimetype.startsWith('image/')) {
       throw new BadRequestException('Only image files are allowed for avatar');
     }
@@ -76,7 +75,7 @@ export class UsersController {
       if (!('secure_url' in uploadResult)) {
         throw new BadRequestException('Cloudinary upload failed');
       }
-      avatarUrl = uploadResult.secure_url;
+      body.avatar = uploadResult.secure_url;
       // body.avatar = uploadResult.secure_url;
     }
     // console.log(avatarUrl);
@@ -84,7 +83,7 @@ export class UsersController {
       const updateData = {
     userName: body.userName,
     password: body.password,
-    avatar: avatarUrl,
+    avatar: body.avatar,
     re_auth_psw: body.re_auth_psw,
   };
 

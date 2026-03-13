@@ -209,7 +209,7 @@ export class UsersService {
   }
   async updateUser(
     userId: string,
-    data: {userName?: string; password?: string, avatar?: string,  re_auth_psw:string;},
+    data: {userName?: string; password?: string, avatar?: File,  re_auth_psw:string;},
   ) {
     const updateData: any = {};
     const user = await this.prisma.user.findUnique({
@@ -230,7 +230,7 @@ export class UsersService {
     }
 
     // Update avatar URL if uploaded
-    if (data.avatar) updateData.avatar = data.avatar;
+    if (data.avatar) updateData.avatarUrl = data.avatar;
 
     // Update the user in the database
     const updatedUser = await this.prisma.user.update({
@@ -240,6 +240,7 @@ export class UsersService {
         id:true,
         userName: true,
         email:true,
+        avatarUrl:true
         
       }
     });

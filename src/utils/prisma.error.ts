@@ -41,5 +41,5 @@ export const handlePrismaError = (error: any): never => {
 
   console.error('Unhandled Prisma Error:', error);
 
-  throw new InternalServerErrorException('Something went wrong');
+  throw new InternalServerErrorException('Something went wrong, retry');
 };

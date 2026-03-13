@@ -3,9 +3,10 @@ import { Transform } from 'class-transformer';
 
 export class UpdateUserDto {
   @IsOptional()
-  @IsString({ message: 'Avatar must be a string' })
+  
+  // @IsString({ message: 'Avatar must be a string' })
   @Transform(({ value }) => String(value)?.trim())
-  avatar?: string;
+  avatar?: File;
   
   @IsOptional()
   @IsString({ message: 'Username must be a string' })
@@ -19,7 +20,7 @@ export class UpdateUserDto {
   password?: string;
   
   @IsString({ message: 'rePassword must be a string' })
-  @IsOptional()
+  @IsNotEmpty()
   @MinLength(6, { message: 'rePassword must be at least 6 characters' })
   @Transform(({ value }) => String(value)?.trim())
   re_auth_psw: string;
