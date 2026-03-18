@@ -1,18 +1,27 @@
-import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import * as bcrypt from 'bcrypt';
 import { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as ms from 'ms';
+@Injectable()
 export class AuthHelper {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Class method is private and async — works fine
-  private async verifyPasswordOrThrow(user: User, password: string) {
+  async verifyPasswordOrThrow(user: User, password: string) {
     const MAX_ATTEMPTS = 3;
-    const LOCK_TIME = 1000 * 60 * 30; // 30 minutes
-
+    
+    const attempts = user.failedAuthAttempts + 1
+    console.log(attempts);
+    const LOCK_TIME = 1000 * 60 * 1; // 30 minutes
+    const remainingAttempts = MAX_ATTEMPTS - attempts;
+  
     if (user.authLockedUntil && user.authLockedUntil > new Date()) {
+        const remainingTime = user?.authLockedUntil?.getTime() - Date.now();
+      const timeLeft = ms(remainingTime, { long: true });
+
       throw new ForbiddenException(
-        'Account is temporarily locked. Try again later.'
+        `Account is temporarily locked. Try again after. ${timeLeft}`
       );
     }
 
@@ -29,8 +38,8 @@ export class AuthHelper {
             authLockedUntil: new Date(Date.now() + LOCK_TIME),
           },
         });
-
-        throw new ForbiddenException('Too many attempts. Account locked.');
+        return { status: false, locked: true, message: 'Too many attempts. Account locked.' };
+        // throw new ForbiddenException('Too many attempts. Account locked.');
       }
 
       await this.prisma.user.update({
@@ -39,8 +48,13 @@ export class AuthHelper {
           failedAuthAttempts: attempts,
         },
       });
-
-      throw new UnauthorizedException('Incorrect password');
+       return { status: false, locked: false, remainingAttempts };
+      // throw new UnauthorizedException(
+      //   `Incorrect password. You have used ${attempts}/${MAX_ATTEMPTS} attempts`
+      // );
+      // throw new UnauthorizedException(
+      //   `Incorrect password. You have ${remainingAttempts} attempt(s) left`
+      // );
     }
 
     // Reset attempts on successful authentication
@@ -51,5 +65,6 @@ export class AuthHelper {
         authLockedUntil: null,
       },
     });
+    return { status: true };
   }
 }

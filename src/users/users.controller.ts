@@ -5,17 +5,26 @@ import {
   Body,
   Put,
   Delete,
+  UnauthorizedException,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { multerConfig } from 'src/config/multer.config';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { Response, Request } from 'express';
+import { AuthHelper } from 'src/auth/helpers/verify-password.helper';
+import { CookiesService } from 'src/auth/cookies.service';
+import { AuthService } from 'src/auth/auth.service';
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly userService: UsersService,
+    private readonly authService: AuthService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly cookieService: CookiesService,
+    private readonly authHelper: AuthHelper
   ) { }
 
   @Get('search')
@@ -56,9 +65,15 @@ export class UsersController {
   async updateUser(
     @Req() req: Request & { user: { sub: string } },
     @Body() body: UpdateUserDto,
+    @Res({ passthrough: true }) res: Response,
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
     const userId = req.user.sub;
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
     // const { userName, password, re_auth_psw } = req.body;
     // 1️⃣ Validate uploaded file
     // if (!re_auth_psw) {
@@ -80,12 +95,34 @@ export class UsersController {
     }
     // console.log(avatarUrl);
     console.log(body);
-      const updateData = {
-    userName: body.userName,
-    password: body.password,
-    avatar: body.avatar,
-    re_auth_psw: body.re_auth_psw,
-  };
+
+    const updateData = {
+      userName: body.userName,
+      password: body.password,
+      avatar: body.avatar,
+      re_auth_psw: body.re_auth_psw,
+    };
+    if (!updateData.re_auth_psw) {
+      throw new BadRequestException("Password is required");
+    }
+    const passwordCheck = await this.authHelper.verifyPasswordOrThrow(user, updateData.re_auth_psw);
+
+    if (!passwordCheck.status) {
+      if (passwordCheck.locked) {
+        // force logout
+        const refreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');
+        await this.authService.logout(refreshToken);
+        this.cookieService.clearCookie(res, 'refreshToken');
+        this.cookieService.clearCookie(res, 'accessToken');
+      }
+
+      // send proper message to frontend
+      throw new UnauthorizedException(
+        passwordCheck.locked
+          ? passwordCheck.message
+          : `Incorrect password. You have ${passwordCheck.remainingAttempts} attempt(s) left`
+      );
+    }
 
     return this.userService.updateUser(
       userId,

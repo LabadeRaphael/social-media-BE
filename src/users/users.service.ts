@@ -5,10 +5,14 @@ import { LoginDto } from 'src/auth/dto/login.dto';
 import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { RegisterDto } from 'src/auth/dto/register.dto';
 import * as bcrypt from 'bcrypt';
+import { AuthHelper } from 'src/auth/helpers/verify-password.helper';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authHelper: AuthHelper
+  ) { }
 
   async register(user: RegisterDto, hashedPassword: string) {
 
@@ -29,7 +33,7 @@ export class UsersService {
 
   async login(login: LoginDto) {
     const { email } = login;
-   const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { email },
     });
     // if (user?.isDeleted) {
@@ -48,7 +52,7 @@ export class UsersService {
       console.log("prisma user", user);
 
       if (!user) {
-        throw new Error(`User with ID ${userId} not found`);
+        throw new Error(`User not found`);
       }
 
       const saved = await this.prisma.refreshToken.create({
@@ -89,6 +93,17 @@ export class UsersService {
 
 
   async updatePassword(userId: string, hashedPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new Error(`User not found`);
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedAuthAttempts: 0,
+        authLockedUntil: null,
+      },
+    });
     return this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword },
@@ -163,7 +178,7 @@ export class UsersService {
         id: true,
         email: true,
         userName: true,
-        avatarUrl:true,
+        avatarUrl: true,
         blockedUsers: { select: { id: true } },
       },
     });
@@ -189,7 +204,7 @@ export class UsersService {
 
     if (!isBlocked) {
       console.log("user not block");
-      
+
       return { success: false, message: 'User was not blocked' };
     }
 
@@ -209,19 +224,21 @@ export class UsersService {
   }
   async updateUser(
     userId: string,
-    data: {userName?: string; password?: string, avatar?: File,  re_auth_psw:string;},
+    data: { userName?: string; password?: string, avatar?: File, re_auth_psw: string; },
   ) {
     const updateData: any = {};
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-        if (!user) throw new ForbiddenException('User not found');
-        console.log(user,data.re_auth_psw);
-        
+    if (!user) throw new ForbiddenException('User not found');
+    // await this.authHelper.verifyPasswordOrThrow(user, data.re_auth_psw)
+    console.log(user, data.re_auth_psw);
+
     // Update username if provided
     if (data.userName) updateData.userName = data.userName;
-    const passwordMatches = await bcrypt.compare(data.re_auth_psw, user.password);
-    if (!passwordMatches) throw new ForbiddenException('Incorrect password');
+
+    // const passwordMatches = await bcrypt.compare(data.re_auth_psw, user.password);
+    // if (!passwordMatches) throw new ForbiddenException('Incorrect password');
 
     // Hash and update password if provided
     if (data.password) {
@@ -236,25 +253,25 @@ export class UsersService {
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select:{
-        id:true,
+      select: {
+        id: true,
         userName: true,
-        email:true,
-        avatarUrl:true
-        
+        email: true,
+        avatarUrl: true
+
       }
     });
-    console.log("The update USER",updatedUser);
+    console.log("The update USER", updatedUser);
 
     return updatedUser;
   }
-  
-   async softDeleteUser(userId: string, password: string) {
+
+  async softDeleteUser(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
     console.log(user);
-    
+
     if (!user) throw new ForbiddenException('User not found');
 
     const passwordMatches = await bcrypt.compare(password, user.password);
@@ -267,16 +284,16 @@ export class UsersService {
         isDeleted: true,
         deletedAt: new Date(),
       },
-      select:{
-        id:true,
+      select: {
+        id: true,
         userName: true,
-        email:true,
-        isDeleted:true
+        email: true,
+        isDeleted: true
       }
-      
+
     });
     console.log(deleteAccount);
-    
+
     return deleteAccount
 
 

@@ -11,13 +11,15 @@ import { ForgotPswDto } from './dto/forgot-psw.dto';
 import { ResetPasswordDto } from './dto/reset-psw.dto';
 import { Response } from 'express';
 import { User } from '@prisma/client';
+import { AuthHelper } from './helpers/verify-password.helper';
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     @Inject(authConfig.KEY)
     private readonly authConfiguration: ConfigType<typeof authConfig>,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly authHelper: AuthHelper
   ) { }
   async register(user: RegisterDto) {
     const hashedPassword = await bcrypt.hash(user.password, 10);
@@ -32,12 +34,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
 
     }
-    const passwordValid = await bcrypt.compare(login.password, user.password);
-    console.log(passwordValid);
+    
+    await this.authHelper.verifyPasswordOrThrow(user, login.password)
+    // const passwordValid = await bcrypt.compare(login.password, user.password);
+    // console.log(passwordValid);
 
-    if (!passwordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    // if (!passwordValid) {
+    //   throw new UnauthorizedException('Invalid credentials');
+    // }
 
     return await this.generateLoginTokens(user);
 
