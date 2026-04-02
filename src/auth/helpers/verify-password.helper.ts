@@ -17,7 +17,10 @@ export class AuthHelper {
       where: { id: userId },
     });
     if (freshUser?.isDeleted) {
-      throw new ForbiddenException('Account has been deleted, you can restore within 30 days.');
+      throw new ForbiddenException(
+        "Account has been temporarily disabled. You can restore it within 30 days."
+      );
+      // throw new ForbiddenException('Account has been temporary disable, you can restore within 30 days.');
     }
     if (!freshUser) {
       throw new UnauthorizedException('User not found');
@@ -49,7 +52,7 @@ export class AuthHelper {
       // const attempts = freshUser.failedAuthAttempts + 1
       // const remainingAttempts = MAX_ATTEMPTS - attempts;
       console.log("attempts", attempts, remainingAttempts);
-
+      
       if (attempts >= MAX_ATTEMPTS) {
         console.log("is i")
 

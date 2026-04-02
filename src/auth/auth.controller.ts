@@ -57,7 +57,7 @@ export class AuthController {
     @Body() recoverAct: RecoverDto) {
     await this.authService.recoverAccount(recoverAct);
     return {
-      message: "If an account with that email exists, a recovery link has been sent.",
+      message: "If an account exists, you will receive an email with instructions.",
       status: true,
     };
   }

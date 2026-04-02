@@ -1,5 +1,5 @@
 import { sendRecoverAccountEmail, sendResetPasswordEmail } from './../utils/mailer';
-import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -119,7 +119,7 @@ export class AuthService {
     console.log("resetPswToken", resetPswToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
     const hashedPswToken = await bcrypt.hash(resetPswToken, 10);
-    await this.usersService.saveResetPswToken(user.id, hashedPswToken, expiresAt)
+    await this.usersService.saveResetPswToken(user?.id, hashedPswToken, expiresAt)
     // Send email with nodemailer util
     await sendResetPasswordEmail(user.email, resetPswToken);
 
@@ -127,15 +127,21 @@ export class AuthService {
   async recoverAccount(recoverAct: RecoverDto) {
 
     const user = await this.usersService.findByEmail(recoverAct);
+    if (!user) {
+      throw new NotFoundException("User no found")
+    }
     if (!user?.isDeleted) {
+      const resetPswToken = await this.generateResetToken(user)
+      await sendResetPasswordEmail(user.email, resetPswToken);
       console.log(`Recover requested for active account: ${recoverAct.email}`);
-      return;
+      // throw new BadRequestException("Account is active. Please use password reset instead.")
     }
 
     const recoverActToken = await this.generateRecoverActToken(user)
     console.log("recoverActToken", recoverActToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
     const hashedToken = await bcrypt.hash(recoverActToken, 10);
+
     await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
     // Send email with nodemailer util
     await sendRecoverAccountEmail(user.email, recoverActToken);
@@ -177,7 +183,8 @@ export class AuthService {
       await this.usersService.updatePassword(userId, hashedPassword);
       await this.usersService.updateTokenState(userId);
       await this.usersService.deleteAllRefreshTokens(userId)
-
+          const deleteOldToken = await this.usersService.deleteRecoverToken(user.id)
+    console.log("deleteOldToken", deleteOldToken);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
         throw new BadRequestException('Reset token has expired. Please request a new one.');
@@ -212,16 +219,18 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException('Invalid token or user not found');
       }
-
-      // 3. Check if already active
-      if (!user.deletedAt) {
-        throw new BadRequestException('Account is already active');
-      }
+     
+        // Used check 
+     
+    
+       
 
       // 🔍 4. Get stored token from DB
       const tokenRecord = await this.usersService.findRecoverToken(userId);
 
       if (!tokenRecord) {
+        console.log("token error", tokenRecord);
+        
         throw new BadRequestException(
           'This recovery link is invalid or has already been used.',
         );
@@ -237,13 +246,12 @@ export class AuthService {
       if (!match) {
         throw new ForbiddenException('Invalid recovery token');
       }
-         // use check 
+    
       if (tokenRecord.used) {
-  throw new BadRequestException(
-    'Recovery link already used. Please request a new one.',
-  );
-}
-
+        throw new BadRequestException(
+          'Recovery link already used. Please request a new one.',
+        );
+      }
       // Expiry check 
       if (tokenRecord.expiresAt < new Date()) {
         console.log("here", tokenRecord.expiresAt);
@@ -251,6 +259,13 @@ export class AuthService {
         throw new GoneException(
           'Recovery link has expired. Please request a new one.',
         );
+      }
+        // 3. Check if already active
+      if (!user.deletedAt) {
+        return {
+          status: true,
+          message: "Account already active. You can log in.",
+        };
       }
 
       // 7. Restore account

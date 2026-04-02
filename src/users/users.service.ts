@@ -326,6 +326,11 @@ export class UsersService {
     return deleteAccount
 
   }
+  async deleteRecoverToken(userId: string) {
+    return this.prisma.recoverAccountToken.deleteMany({
+      where: { userId },
+    });
+  }
   async findRecoverToken(userId: string) {
     return this.prisma.recoverAccountToken.findFirst({
       where: {
@@ -333,30 +338,30 @@ export class UsersService {
         used: false,
       },
       orderBy: {
-      createdAt: 'desc',
-    },
+        createdAt: 'desc',
+      },
     });
   }
   async restoreAccount(userId: string) {
-  return this.prisma.user.update({
-    where: { id: userId },
-    data: {
-      deletedAt: null,
-      isDeleted: false,
-    },
-  });
-}
-async updateRecoverTokenState(userId: string) {
-  return this.prisma.recoverAccountToken.updateMany({
-    where: {
-      userId,
-      used: false,
-    },
-    data: {
-      used: true,
-    },
-  });
-}
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt: null,
+        isDeleted: false,
+      },
+    });
+  }
+  async updateRecoverTokenState(userId: string) {
+    return this.prisma.recoverAccountToken.updateMany({
+      where: {
+        userId,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+  }
   // async resetFailedAttempts(userId: string) {
   //   return this.prisma.user.update({
   //     where: { id: userId },
