@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
@@ -6,12 +6,14 @@ import { ForgotPswDto } from 'src/auth/dto/forgot-psw.dto';
 import { RegisterDto } from 'src/auth/dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { AuthHelper } from 'src/auth/helpers/verify-password.helper';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authHelper: AuthHelper
+    private readonly authHelper: AuthHelper,
+    private readonly cloudinaryService: CloudinaryService,
   ) { }
 
   async register(user: RegisterDto, hashedPassword: string) {
@@ -36,9 +38,6 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
-    // if (user?.isDeleted) {
-    //   throw new ForbiddenException('Account has been deleted, kindly recover your it');
-    // }
     return user
   }
 
@@ -77,6 +76,15 @@ export class UsersService {
     return this.prisma.passwordResetToken.create({
       data: {
         hashedPswToken,
+        userId,
+        expiresAt
+      },
+    });
+  }
+  async saveRecoverActToken(userId: string, hashedToken: string, expiresAt: Date) {
+    return this.prisma.recoverAccountToken.create({
+      data: {
+        hashedToken,
         userId,
         expiresAt
       },
@@ -224,32 +232,56 @@ export class UsersService {
   }
   async updateUser(
     userId: string,
-    data: { userName?: string; password?: string, avatar?: File, re_auth_psw: string; },
+    data: { userName?: string; password?: string; re_auth_psw: string },
+    avatar?: Express.Multer.File
   ) {
     const updateData: any = {};
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-    if (!user) throw new ForbiddenException('User not found');
-    // await this.authHelper.verifyPasswordOrThrow(user, data.re_auth_psw)
-    console.log(user, data.re_auth_psw);
 
-    // Update username if provided
+    if (!user) throw new NotFoundException('User not found');
+
+    // validate password input
+    if (!data.re_auth_psw) {
+      throw new BadRequestException('Password is required');
+    }
+
+    // verify password
+    await this.authHelper.verifyPasswordOrThrow(user.id, data.re_auth_psw);
+
+
+
+    // handle avatar
+    let avatarUrl: string | undefined;
+
+    if (avatar && !avatar.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    if (avatar) {
+      const uploadResult = await this.cloudinaryService.uploadFile(avatar);
+
+      if (!('secure_url' in uploadResult)) {
+        throw new BadRequestException('Cloudinary upload failed');
+      }
+
+      avatarUrl = uploadResult.secure_url;
+    }
+
+    // update fields
     if (data.userName) updateData.userName = data.userName;
 
-    // const passwordMatches = await bcrypt.compare(data.re_auth_psw, user.password);
-    // if (!passwordMatches) throw new ForbiddenException('Incorrect password');
-
-    // Hash and update password if provided
     if (data.password) {
       const hashedPassword = await bcrypt.hash(data.password, 10);
       updateData.password = hashedPassword;
     }
 
-    // Update avatar URL if uploaded
-    if (data.avatar) updateData.avatarUrl = data.avatar;
+    if (avatarUrl) {
+      updateData.avatarUrl = avatarUrl;
+    }
 
-    // Update the user in the database
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: updateData,
@@ -257,12 +289,9 @@ export class UsersService {
         id: true,
         userName: true,
         email: true,
-        avatarUrl: true
-
-      }
+        avatarUrl: true,
+      },
     });
-    console.log("The update USER", updatedUser);
-
     return updatedUser;
   }
 
@@ -296,8 +325,46 @@ export class UsersService {
 
     return deleteAccount
 
-
   }
-
+  async findRecoverToken(userId: string) {
+    return this.prisma.recoverAccountToken.findFirst({
+      where: {
+        userId,
+        used: false,
+      },
+      orderBy: {
+      createdAt: 'desc',
+    },
+    });
+  }
+  async restoreAccount(userId: string) {
+  return this.prisma.user.update({
+    where: { id: userId },
+    data: {
+      deletedAt: null,
+      isDeleted: false,
+    },
+  });
+}
+async updateRecoverTokenState(userId: string) {
+  return this.prisma.recoverAccountToken.updateMany({
+    where: {
+      userId,
+      used: false,
+    },
+    data: {
+      used: true,
+    },
+  });
+}
+  // async resetFailedAttempts(userId: string) {
+  //   return this.prisma.user.update({
+  //     where: { id: userId },
+  //     data: {
+  //       failedAuthAttempts: 0,
+  //       authLockedUntil: null,
+  //     },
+  //   });
+  // }
 }
 

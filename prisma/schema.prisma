@@ -14,90 +14,107 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  password      String
-  isDeleted   Boolean   @default(false)
-  deletedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  userName      String         @unique
-  avatarUrl      String?
-  failedAuthAttempts Int @default(0)
-  authLockedUntil DateTime?
+  id                  String                @id @default(uuid())
+  email               String                @unique
+  password            String
+  isDeleted           Boolean               @default(false)
+  deletedAt           DateTime?
+  createdAt           DateTime              @default(now())
+  userName            String                @unique
+  avatarUrl           String?
+  failedAuthAttempts  Int                   @default(0)
+  authLockedUntil     DateTime?
   // profile       Profile?
-  refreshTokens RefreshToken[]
-  resetTokens   PasswordResetToken[]
+  refreshTokens       RefreshToken[]
+  resetTokens         PasswordResetToken[]
   // Relations
-  messages       Message[]       @relation("UserMessages")       // one user → many messages
-  participants   Participant[]  
-  blockedUsers User[]    @relation("UserBlocks")
-  blockedBy    User[]    @relation("UserBlocks")
+  messages            Message[]             @relation("UserMessages") // one user → many messages
+  participants        Participant[]
+  blockedUsers        User[]                @relation("UserBlocks")
+  blockedBy           User[]                @relation("UserBlocks")
+  RecoverAccountToken RecoverAccountToken[]
 }
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   
+  token     String
   userId    String
   createdAt DateTime @default(now())
   expiresAt DateTime
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Conversation {
-  id        String      @id @default(uuid())
-  createdAt DateTime    @default(now())
-  participants Participant[]  // changed line
+  id           String        @id @default(uuid())
+  createdAt    DateTime      @default(now())
+  participants Participant[] // changed line
   // Relations
   // participants User[]   @relation("UserConversations")  // 1-to-1: two users per conversation
-  messages     Message[]                               // conversation can have many messages
+  messages     Message[] // conversation can have many messages
 
   // Optional extra
-  lastMessageId String? @unique
-  lastMessage   Message?   @relation("ConversationLastMessage", fields: [lastMessageId], references: [id])
-
+  lastMessageId String?  @unique
+  lastMessage   Message? @relation("ConversationLastMessage", fields: [lastMessageId], references: [id])
 }
+
 model Participant {
-  id              String        @id @default(uuid())
-  userId          String
-  conversationId  String
-  unreadCount     Int           @default(0)
-  clearedAt       DateTime? 
-  user            User          @relation(fields: [userId], references: [id])
-  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  id             String       @id @default(uuid())
+  userId         String
+  conversationId String
+  unreadCount    Int          @default(0)
+  clearedAt      DateTime?
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([userId, conversationId]) // one entry per user per conversation
 }
+
 model Message {
-  id             String       @id @default(uuid())
-  text           String?
-  mediaUrl       String?
-  duration       Int?
-  fileName      String?
-  fileSize      Int?
-  fileType      String?
-  type           MessageType  @default(TEXT)
-  createdAt      DateTime     @default(now())
-  isRead        Boolean  @default(false) // 👈 Add this line
+  id        String      @id @default(uuid())
+  text      String?
+  mediaUrl  String?
+  duration  Int?
+  fileName  String?
+  fileSize  Int?
+  fileType  String?
+  type      MessageType @default(TEXT)
+  createdAt DateTime    @default(now())
+  isRead    Boolean     @default(false) // 👈 Add this line
   // Relations
-  senderId       String
-  sender         User         @relation("UserMessages", fields: [senderId], references: [id])
+  senderId  String
+  sender    User        @relation("UserMessages", fields: [senderId], references: [id])
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
- // Backlink for lastMessage
-  Conversation   Conversation? @relation("ConversationLastMessage")
+  // Backlink for lastMessage
+  Conversation Conversation? @relation("ConversationLastMessage")
 }
+
 model PasswordResetToken {
-  id        String   @id @default(uuid())
+  id             String   @id @default(uuid())
   hashedPswToken String   @unique
-  userId    String 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  used      Boolean  @default(false)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  used           Boolean  @default(false)
 
   @@index([userId, hashedPswToken])
 }
+
+model RecoverAccountToken {
+  id          String   @id @default(uuid())
+  hashedToken String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+
+  @@index([userId, hashedToken])
+}
+
 // model Profile {
 //   id        String   @id @default(uuid())
 //   userId    String   @unique
@@ -124,6 +141,3 @@ enum MessageType {
   VOICE
   DOCUMENT
 }
-
-
-

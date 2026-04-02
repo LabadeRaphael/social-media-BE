@@ -8,63 +8,84 @@ export class AuthHelper {
   constructor(private prisma: PrismaService) { }
 
   // Class method is private and async — works fine
-  async verifyPasswordOrThrow(user: User, password: string) {
+  async verifyPasswordOrThrow(userId: string, password: string) {
+    console.log("🔥 VERIFY CALLED");
     const MAX_ATTEMPTS = 3;
-    
-    const attempts = user.failedAuthAttempts + 1
-    console.log(attempts);
-    const LOCK_TIME = 1000 * 60 * 1; // 30 minutes
-    const remainingAttempts = MAX_ATTEMPTS - attempts;
-  
-    if (user.authLockedUntil && user.authLockedUntil > new Date()) {
-        const remainingTime = user?.authLockedUntil?.getTime() - Date.now();
+    const LOCK_TIME = 1000 * 60 * 1; // 15 minutes
+    console.log("user2", userId);
+    const freshUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (freshUser?.isDeleted) {
+      throw new ForbiddenException('Account has been deleted, you can restore within 30 days.');
+    }
+    if (!freshUser) {
+      throw new UnauthorizedException('User not found');
+    }
+    console.log("freshUser", freshUser);
+    if (freshUser.authLockedUntil && freshUser.authLockedUntil > new Date()) {
+      console.log("i get here");
+      const remainingTime = freshUser?.authLockedUntil?.getTime() - Date.now();
       const timeLeft = ms(remainingTime, { long: true });
 
-      throw new ForbiddenException(
-        `Account is temporarily locked. Try again after. ${timeLeft}`
-      );
+      // throw new ForbiddenException(
+      //   `Account is temporarily locked. Try again after. ${timeLeft}`
+      // );
+      throw new ForbiddenException({
+        message: `Account is temporarily locked`,
+        timeLeft: remainingTime,
+        readableTime: timeLeft,
+      });
     }
-
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await bcrypt.compare(password, freshUser.password);
 
     if (!isValid) {
-      const attempts = user.failedAuthAttempts + 1;
+      const latestUser = await this.prisma.user.findUnique({ where: { id: userId } });
+      console.log("laes", latestUser);
+
+      const attempts = (latestUser?.failedAuthAttempts || 0) + 1;
+      const remainingAttempts = MAX_ATTEMPTS - attempts;
+
+      // const attempts = freshUser.failedAuthAttempts + 1
+      // const remainingAttempts = MAX_ATTEMPTS - attempts;
+      console.log("attempts", attempts, remainingAttempts);
 
       if (attempts >= MAX_ATTEMPTS) {
+        console.log("is i")
+
         await this.prisma.user.update({
-          where: { id: user.id },
+          where: { id: userId },
           data: {
             failedAuthAttempts: 0,
             authLockedUntil: new Date(Date.now() + LOCK_TIME),
           },
         });
-        return { status: false, locked: true, message: 'Too many attempts. Account locked.' };
-        // throw new ForbiddenException('Too many attempts. Account locked.');
+
+        throw new ForbiddenException(`Too many attempts. Retry  after 1 minute.`);
       }
 
-      await this.prisma.user.update({
-        where: { id: user.id },
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
         data: {
           failedAuthAttempts: attempts,
+          authLockedUntil: null,
         },
       });
-       return { status: false, locked: false, remainingAttempts };
-      // throw new UnauthorizedException(
-      //   `Incorrect password. You have used ${attempts}/${MAX_ATTEMPTS} attempts`
-      // );
-      // throw new UnauthorizedException(
-      //   `Incorrect password. You have ${remainingAttempts} attempt(s) left`
-      // );
-    }
 
-    // Reset attempts on successful authentication
-    await this.prisma.user.update({
-      where: { id: user.id },
+      // ✅ use this from now on
+      console.log("upde user", updatedUser);
+      throw new UnauthorizedException(
+        `Incorrect password. You have ${remainingAttempts} attempt(s) left`
+      );
+
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
       data: {
         failedAuthAttempts: 0,
         authLockedUntil: null,
       },
     });
-    return { status: true };
   }
+
 }

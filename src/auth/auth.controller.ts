@@ -11,6 +11,8 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigType } from '@nestjs/config';
 import * as ms from 'ms';
+import { RecoverDto } from './dto/recover-account.dto';
+import { VerifyActDto } from './dto/verify-account.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -31,12 +33,13 @@ export class AuthController {
   @Post('login')
   async login(@Body() login: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.authService.login(login);
-    const { accessToken, refreshToken} = tokens
-    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
-    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration);      
+    const { accessToken, refreshToken } = tokens
+    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);
+    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration);
     this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
     this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs); // 7d
-    return { message: 'Login successful', status: true};
+    return { message: 'Login successful', status: true };
+
   }
 
   @AllowAnonymous()
@@ -47,6 +50,18 @@ export class AuthController {
     await this.authService.forgotPassword(forgotPsw);
     return { message: 'If your email is registered, you will receive a reset link shortly.', status: true };
   }
+  @AllowAnonymous()
+  @Post('recover-account')
+  async recoverAccount(
+    @Req() req: Request & { user: { sub: string } },
+    @Body() recoverAct: RecoverDto) {
+    await this.authService.recoverAccount(recoverAct);
+    return {
+      message: "If an account with that email exists, a recovery link has been sent.",
+      status: true,
+    };
+  }
+
 
   @AllowAnonymous()
   @Post('reset-password')
@@ -59,18 +74,24 @@ export class AuthController {
     this.cookieService.clearCookie(res, 'accessToken');
     return { message: 'Password reset successful', status: true };
   }
+  @AllowAnonymous()
+  @Post('recover-account-verify')
+  async verifyRecoverAccount
+    (@Body() token: VerifyActDto) {
+    return this.authService.verifyRecoverAccount(token);
+  }
 
   @AllowAnonymous()
   @Post('refresh-token')
   async refreshToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const oldRefreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');
     console.log("refresh token", oldRefreshToken);
-    const { refreshToken, accessToken,accessTokenExpireAt } = await this.authService.refreshToken(oldRefreshToken);
-    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);    
-    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration); 
+    const { refreshToken, accessToken, accessTokenExpireAt } = await this.authService.refreshToken(oldRefreshToken);
+    const accessExpirationMs = ms(this.authConfiguration.jwtAccessExpiration);
+    const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration);
     this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
     this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs);
-    return { message: 'Refresh token generation successful', status: true,  accessTokenExpireAt };
+    return { message: 'Refresh token generation successful', status: true, accessTokenExpireAt };
   }
   // @AllowAnonymous()
   @Post('logout')
@@ -84,9 +105,9 @@ export class AuthController {
     return { message: 'Logout successful', status: true };
   }
   @Get('token-info')
-  tokenInfo(@Req() req: Request) {    
+  tokenInfo(@Req() req: Request) {
     const accessToken = this.cookieService.getAuthCookie(req, 'accessToken');
-    
+
     if (!accessToken) {
       throw new UnauthorizedException('No access token provided');
     }

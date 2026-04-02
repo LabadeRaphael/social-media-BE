@@ -2,11 +2,11 @@ import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateUserDto {
-  @IsOptional()
+  // @IsOptional()
   
-  // @IsString({ message: 'Avatar must be a string' })
-  @Transform(({ value }) => String(value)?.trim())
-  avatar?: File;
+  // // @IsString({ message: 'Avatar must be a string' })
+  // @Transform(({ value }) => String(value)?.trim())
+  // avatar?: File;
   
   @IsOptional()
   @IsString({ message: 'Username must be a string' })

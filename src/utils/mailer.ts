@@ -41,5 +41,53 @@ const sendResetPasswordEmail = (to: string, token: string) => {
 
   return transporter.sendMail(mailOptions);
 };
+const sendRecoverAccountEmail = (to: string, token: string) => {
+  // const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account?token=${token}`;
+const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
+  const mailOptions = {
+    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
+    to,
+    subject: "Recover Your Nestfinity Account",
+    html: `
+      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
+        
+        <h2 style="color: #ffc244; margin-bottom: 12px;">
+          Account Recovery Request
+        </h2>
 
-export { sendResetPasswordEmail };
+        <p style="color: #fdf8f4; font-size: 14px;">
+          We received a request to restore your Nestfinity account.
+        </p>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          If this was you, click the button below to recover your account:
+        </p>
+
+        <a href="${recoverUrl}" style="
+          display: inline-block;
+          background-color: #ffc244;
+          color: #1a1a1a;
+          padding: 12px 22px;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+          margin-top: 10px;
+        ">
+          Recover Account
+        </a>
+
+        <p style="margin-top: 20px; font-size: 13px; color: #cccccc;">
+          This link will expire in 15 minutes for your security.
+        </p>
+
+        <p style="font-size: 12px; color: #888;">
+          If you did not request this, you can safely ignore this email.
+        </p>
+      </div>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+
+export { sendResetPasswordEmail, sendRecoverAccountEmail};
