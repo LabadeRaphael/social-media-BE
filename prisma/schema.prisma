@@ -24,6 +24,7 @@ model User {
   avatarUrl           String?
   failedAuthAttempts  Int                   @default(0)
   authLockedUntil     DateTime?
+  deletionWarningSent Boolean @default(false)
   // profile       Profile?
   refreshTokens       RefreshToken[]
   resetTokens         PasswordResetToken[]

@@ -19,4 +19,46 @@ export class TokenCleanupService {
       this.logger.log(`🧹 Deleted ${result.count} expired reset tokens.`);
     }
   }
+   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
+  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  async handleDeletedAccounts() {
+    const users = await this.prisma.user.findMany({
+      where: {
+        isDeleted: true,
+        deletionWarningSent: false,
+        deletedAt: { not: null },
+      },
+    });
+
+    const now = Date.now();
+
+    for (const user of users) {
+      const deletedAt = new Date(user.deletedAt!);
+
+      const diffInMs = now - deletedAt.getTime();
+      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+      const remainingDays = 30 - diffInDays;
+
+      // ⚠️ Send warning email when 1 day left
+      if (remainingDays === 1) {
+        // await this.mailService.sendMail({
+        //   to: user.email,
+        //   subject: "⚠️ Final Warning",
+        //   text: "Your account will be permanently deleted in 1 day. Restore it now if you want to keep your data.",
+        // });
+
+        this.logger.log(`Warning email sent to ${user.email}`);
+      }
+
+      // ❌ Auto delete after 30 days
+      if (remainingDays <= 0) {
+        await this.prisma.user.delete({
+          where: { id: user.id },
+        });
+
+        this.logger.log(`Deleted account: ${user.email}`);
+      }
+    }
+  }
 }

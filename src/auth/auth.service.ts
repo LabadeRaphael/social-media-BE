@@ -183,8 +183,6 @@ export class AuthService {
       await this.usersService.updatePassword(userId, hashedPassword);
       await this.usersService.updateTokenState(userId);
       await this.usersService.deleteAllRefreshTokens(userId)
-          const deleteOldToken = await this.usersService.deleteRecoverToken(user.id)
-    console.log("deleteOldToken", deleteOldToken);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
         throw new BadRequestException('Reset token has expired. Please request a new one.');
@@ -220,11 +218,6 @@ export class AuthService {
         throw new UnauthorizedException('Invalid token or user not found');
       }
      
-        // Used check 
-     
-    
-       
-
       // 🔍 4. Get stored token from DB
       const tokenRecord = await this.usersService.findRecoverToken(userId);
 
@@ -276,7 +269,8 @@ export class AuthService {
 
       // 9. Optional (VERY GOOD): invalidate sessions
       await this.usersService.deleteAllRefreshTokens(userId);
-
+      const deleteOldToken = await this.usersService.deleteRecoverToken(user.id)
+      console.log("deleteOldToken", deleteOldToken);
       return {
         status: true,
         message: 'Account successfully restored',
