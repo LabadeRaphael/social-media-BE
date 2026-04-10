@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { sendWarningRecoverAccount } from 'src/utils/mailer';
+import { AuthService } from './auth.service';
 
 @Injectable()
 export class TokenCleanupService {
   private readonly logger = new Logger(TokenCleanupService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private authService: AuthService
+  ) { }
 
   // Runs every midnight (you can change this interval)
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -19,7 +24,7 @@ export class TokenCleanupService {
       this.logger.log(`🧹 Deleted ${result.count} expired reset tokens.`);
     }
   }
-   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
+  // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
   @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async handleDeletedAccounts() {
     const users = await this.prisma.user.findMany({
@@ -42,12 +47,10 @@ export class TokenCleanupService {
 
       // ⚠️ Send warning email when 1 day left
       if (remainingDays === 1) {
-        // await this.mailService.sendMail({
-        //   to: user.email,
-        //   subject: "⚠️ Final Warning",
-        //   text: "Your account will be permanently deleted in 1 day. Restore it now if you want to keep your data.",
-        // });
-
+        await this.authService.generateAndSendRecoverToken(user, {
+          expiresIn: '24h',
+          emailType: 'warning',
+        })
         this.logger.log(`Warning email sent to ${user.email}`);
       }
 

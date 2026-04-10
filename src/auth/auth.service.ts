@@ -1,4 +1,4 @@
-import { sendRecoverAccountEmail, sendResetPasswordEmail } from './../utils/mailer';
+import { sendRecoverAccountEmail, sendResetPasswordEmail, sendWarningRecoverAccount } from './../utils/mailer';
 import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -23,6 +23,11 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly authHelper: AuthHelper
   ) { }
+  private parseExpiry(exp: string) {
+    if (exp === '15m') return 15 * 60 * 1000;
+    if (exp === '24h') return 24 * 60 * 60 * 1000;
+    return 15 * 60 * 1000; // fallback
+  }
   async register(user: RegisterDto) {
     const hashedPassword = await bcrypt.hash(user.password, 10);
     return this.usersService.register(user, hashedPassword);
@@ -67,7 +72,7 @@ export class AuthService {
     // Compute expiresAt
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     console.log(user.id, refreshToken, expiresAt);
-    const savedToken = await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
+    await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
     // console.log("Saved refresh token:", savedToken);
 
     // console.log(this.authConfiguration.jwtAccessExpiration);
@@ -104,6 +109,55 @@ export class AuthService {
 
     return recoverActToken;
   }
+  async generateAndSendRecoverToken(
+    user: User,
+    options: {
+      expiresIn: string;
+      emailType: 'recover' | 'warning';
+    }
+  ) {
+    const { expiresIn, emailType } = options;
+
+    const recoverToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        email: user.email,
+      },
+      {
+        secret: this.authConfiguration.jwtRecoverAccountSecret,
+        expiresIn,
+        audience: this.authConfiguration.jwtAudience,
+        issuer: this.authConfiguration.jwtIssuer,
+      }
+    );
+
+    const expiresAt = new Date(Date.now() + this.parseExpiry(expiresIn));
+
+    const hashedToken = await bcrypt.hash(recoverToken, 10);
+    await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
+    // await this.prisma.recoverToken.upsert({
+    //   where: { userId: user.id },
+    //   update: {
+    //     hashedToken,
+    //     expiresAt,
+    //     used: false,
+    //   },
+    //   create: {
+    //     userId: user.id,
+    //     hashedToken,
+    //     expiresAt,
+    //     used: false,
+    //   },
+    // });
+
+    // 👇 Different emails based on context
+    if (emailType === 'recover') {
+      
+      await sendRecoverAccountEmail(user.email, recoverToken);
+    } else {
+      await sendWarningRecoverAccount(user.email, recoverToken);
+    }
+  }
 
 
 
@@ -136,15 +190,19 @@ export class AuthService {
       console.log(`Recover requested for active account: ${recoverAct.email}`);
       // throw new BadRequestException("Account is active. Please use password reset instead.")
     }
+    await this.generateAndSendRecoverToken(user, {
+          expiresIn: '15m',
+          emailType: 'recover',
+        })
 
-    const recoverActToken = await this.generateRecoverActToken(user)
-    console.log("recoverActToken", recoverActToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
-    const hashedToken = await bcrypt.hash(recoverActToken, 10);
+    // const recoverActToken = await this.generateRecoverActToken(user)
+    // console.log("recoverActToken", recoverActToken);
+    // const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    // const hashedToken = await bcrypt.hash(recoverActToken, 10);
 
-    await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
-    // Send email with nodemailer util
-    await sendRecoverAccountEmail(user.email, recoverActToken);
+    // await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
+    // // Send email with nodemailer util
+    // await sendRecoverAccountEmail(user.email, recoverActToken);
 
   }
 
@@ -217,13 +275,13 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException('Invalid token or user not found');
       }
-     
+
       // 🔍 4. Get stored token from DB
       const tokenRecord = await this.usersService.findRecoverToken(userId);
 
       if (!tokenRecord) {
         console.log("token error", tokenRecord);
-        
+
         throw new BadRequestException(
           'This recovery link is invalid or has already been used.',
         );
@@ -239,7 +297,7 @@ export class AuthService {
       if (!match) {
         throw new ForbiddenException('Invalid recovery token');
       }
-    
+
       if (tokenRecord.used) {
         throw new BadRequestException(
           'Recovery link already used. Please request a new one.',
@@ -253,7 +311,7 @@ export class AuthService {
           'Recovery link has expired. Please request a new one.',
         );
       }
-        // 3. Check if already active
+      // 3. Check if already active
       if (!user.deletedAt) {
         return {
           status: true,

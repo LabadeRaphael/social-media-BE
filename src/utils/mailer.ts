@@ -90,4 +90,53 @@ const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?toke
   return transporter.sendMail(mailOptions);
 };
 
-export { sendResetPasswordEmail, sendRecoverAccountEmail};
+const sendWarningRecoverAccount = (to: string, token: string) => {
+  const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
+
+  const mailOptions = {
+    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
+    to,
+    subject: "⚠️ Final Warning: Account Deletion in 24 Hours",
+    html: `
+      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
+        
+        <h2 style="color: #ffc244; margin-bottom: 12px;">
+          ⚠️ Final Warning
+        </h2>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          Your Nestfinity account will be permanently deleted in <b>24 hours</b>.
+        </p>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          If this was a mistake or you still want to keep your account, you can restore it now.
+        </p>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          Once deleted, all your data will be permanently removed and cannot be recovered.
+        </p>
+
+        <a href="${recoverUrl}" style="
+          display: inline-block;
+          background-color: #ffc244;
+          color: #1a1a1a;
+          padding: 12px 22px;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+          margin-top: 12px;
+        ">
+          Restore My Account
+        </a>
+
+        <p style="margin-top: 20px; font-size: 12px; color: #888;">
+          This is your final reminder before permanent deletion.
+        </p>
+      </div>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+
+export { sendResetPasswordEmail, sendRecoverAccountEmail, sendWarningRecoverAccount};
