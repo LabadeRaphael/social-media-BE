@@ -3,8 +3,8 @@ import * as nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,   // e.g. "smtp.gmail.com"
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false, // true for 465, false for other ports
+  port: Number(process.env.SMTP_PORT),
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -20,7 +20,7 @@ const sendResetPasswordEmail = (to: string, token: string) => {
     subject: 'Password Reset Request',
     html: `
       <div style="background-color: #1a1a1a; padding: 20px; font-family: Arial, sans-serif; color: #fdf8f4;">
-        <h2 style="color: #fdf8f4;">Password Reset Request</h2>
+        <h2 style="color: #ffc244; margin-bottom: 12px;">Password Reset Request</h2>
         <p style="color: #fdf8f4;">You requested to reset your password.</p>
         <p style="color: #fdf8f4;">Click the button below to reset it:</p>
         <a href="${resetUrl}" style="
@@ -138,5 +138,54 @@ const sendWarningRecoverAccount = (to: string, token: string) => {
 
   return transporter.sendMail(mailOptions);
 };
+const sendEmailChangeVerification = (to: string, token: string) => {
+  const verifyUrl = `${process.env.FRONTEND_URL}/auth/confirm-email-change?token=${token}`;
 
-export { sendResetPasswordEmail, sendRecoverAccountEmail, sendWarningRecoverAccount};
+  const mailOptions = {
+    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
+    to,
+    subject: "🔐 Confirm Your Email Change",
+
+    html: `
+      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
+        
+        <h2 style="color: #ffc244; margin-bottom: 12px;">
+          🔐 Email Change Request
+        </h2>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          We received a request to change your email address on your Nestfinity account.
+        </p>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          If this was you, please confirm this change by clicking the button below.
+        </p>
+
+        <p style="color: #fdf8f4; font-size: 14px;">
+          If you did NOT request this, you can safely ignore this email — your account remains secure.
+        </p>
+
+        <a href="${verifyUrl}" style="
+          display: inline-block;
+          background-color: #ffc244;
+          color: #1a1a1a;
+          padding: 12px 22px;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+          margin-top: 12px;
+        ">
+          Confirm Email Change
+        </a>
+
+        <p style="margin-top: 20px; font-size: 12px; color: #888;">
+          This link will expire soon for your security.
+        </p>
+      </div>
+    `,
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+
+export { sendResetPasswordEmail, sendRecoverAccountEmail, sendWarningRecoverAccount, sendEmailChangeVerification};

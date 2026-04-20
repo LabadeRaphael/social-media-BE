@@ -1,4 +1,4 @@
-import { sendRecoverAccountEmail, sendResetPasswordEmail, sendWarningRecoverAccount } from './../utils/mailer';
+import { sendEmailChangeVerification, sendRecoverAccountEmail, sendResetPasswordEmail, sendWarningRecoverAccount } from './../utils/mailer';
 import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -14,6 +14,12 @@ import { User } from '@prisma/client';
 import { AuthHelper } from './helpers/verify-password.helper';
 import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
+type SafeUser = {
+  id: string;
+  email: string;
+  newEmail?: string
+  userName: string;
+};
 @Injectable()
 export class AuthService {
   constructor(
@@ -28,6 +34,7 @@ export class AuthService {
     if (exp === '24h') return 24 * 60 * 60 * 1000;
     return 15 * 60 * 1000; // fallback
   }
+
   async register(user: RegisterDto) {
     const hashedPassword = await bcrypt.hash(user.password, 10);
     return this.usersService.register(user, hashedPassword);
@@ -109,14 +116,28 @@ export class AuthService {
 
     return recoverActToken;
   }
+  private async generateChangeEmailToken(user: User, newEmail: string) {
+  return this.signToken(
+    user.id,
+    this.authConfiguration.jwtResetPswExpiration!, // better rename later
+    this.authConfiguration.jwtRecoverAccountSecret!,
+    {
+      newEmail,
+      // type: 'change-email',
+    }
+  );
+}
+
   async generateAndSendRecoverToken(
-    user: User,
+
+    user: SafeUser,
     options: {
       expiresIn: string;
-      emailType: 'recover' | 'warning';
+      emailType: 'recover' | 'warning' | 'change-email';
+      newEmail?: string;
     }
   ) {
-    const { expiresIn, emailType } = options;
+    const { expiresIn, emailType} = options;
 
     const recoverToken = await this.jwtService.signAsync(
       {
@@ -152,9 +173,10 @@ export class AuthService {
 
     // 👇 Different emails based on context
     if (emailType === 'recover') {
-      
+
       await sendRecoverAccountEmail(user.email, recoverToken);
-    } else {
+    }
+    else {
       await sendWarningRecoverAccount(user.email, recoverToken);
     }
   }
@@ -191,9 +213,9 @@ export class AuthService {
       // throw new BadRequestException("Account is active. Please use password reset instead.")
     }
     await this.generateAndSendRecoverToken(user, {
-          expiresIn: '15m',
-          emailType: 'recover',
-        })
+      expiresIn: '15m',
+      emailType: 'recover',
+    })
 
     // const recoverActToken = await this.generateRecoverActToken(user)
     // console.log("recoverActToken", recoverActToken);
@@ -406,5 +428,20 @@ export class AuthService {
       throw new ForbiddenException('Invalid or expired refresh token');
     }
   }
+  async requestEmailChange(userId: string, newEmail: string) {
+    const user = await this.usersService.findById(userId);
+    console.log("request user", user);
 
+    if (!user) throw new BadRequestException('User not found');
+
+    // create token (valid 15 mins)
+    // const token = this.jwtService.sign(
+    //   { userId, newEmail },
+    //   { expiresIn: '15m' },
+    // );
+   const changeEmailToken = await this.generateChangeEmailToken(user,newEmail)
+    await sendEmailChangeVerification(newEmail,changeEmailToken)
+
+    return { message: 'Verification sent to new email' };
+  }
 }

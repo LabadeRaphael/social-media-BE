@@ -1,5 +1,5 @@
 import authConfig from 'src/config/auth.config';
-import { Body, Controller, Get, Inject, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Put, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AllowAnonymous } from 'src/decorators/public.decorator';
@@ -13,6 +13,7 @@ import { ConfigType } from '@nestjs/config';
 import * as ms from 'ms';
 import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
+import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -132,4 +133,15 @@ export class AuthController {
       throw new UnauthorizedException('Access token invalid or expired');
     }
   }
+  @Put('request-email-change')
+  requestEmailChange(
+    @Req() req:Request & { user: { sub: string }},
+    @Body() dto: RequestEmailChangeDto,
+  ) {
+    console.log("i dey here");
+    
+    const userId = req?.user?.sub
+    return this.authService.requestEmailChange(userId, dto.newEmail);
+  }
+
 }

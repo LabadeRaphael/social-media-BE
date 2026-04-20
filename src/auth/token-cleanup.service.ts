@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { sendWarningRecoverAccount } from 'src/utils/mailer';
 import { AuthService } from './auth.service';
+import { removeAllListeners } from 'process';
 
 @Injectable()
 export class TokenCleanupService {
@@ -25,7 +26,7 @@ export class TokenCleanupService {
     }
   }
   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
-  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  @Cron(CronExpression.EVERY_DAY_AT_10AM)
   async handleDeletedAccounts() {
     const users = await this.prisma.user.findMany({
       where: {
@@ -33,7 +34,15 @@ export class TokenCleanupService {
         deletionWarningSent: false,
         deletedAt: { not: null },
       },
+      select: {
+        id: true,
+        email: true,
+        userName: true,
+        deletedAt: true,
+        deletionWarningSent: true,
+      },
     });
+    console.log("the user", users);
 
     const now = Date.now();
 
@@ -44,15 +53,26 @@ export class TokenCleanupService {
       const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
       const remainingDays = 30 - diffInDays;
+      //tester
+      // const remainingDays = 30 - 30;
+      console.log("remaining days", remainingDays);
 
       // ⚠️ Send warning email when 1 day left
-      if (remainingDays === 1) {
+      if (remainingDays === 1 && !user.deletionWarningSent) {
         await this.authService.generateAndSendRecoverToken(user, {
           expiresIn: '24h',
           emailType: 'warning',
         })
         this.logger.log(`Warning email sent to ${user.email}`);
+        const afterMsg = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { deletionWarningSent: true },
+        })
+        console.log("after", afterMsg);
+
+
       }
+      console.log("the user 2", users);
 
       // ❌ Auto delete after 30 days
       if (remainingDays <= 0) {

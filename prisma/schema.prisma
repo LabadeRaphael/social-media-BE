@@ -60,11 +60,11 @@ model Conversation {
 
 model Participant {
   id             String       @id @default(uuid())
-  userId         String
   conversationId String
   unreadCount    Int          @default(0)
   clearedAt      DateTime?
-  user           User         @relation(fields: [userId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([userId, conversationId]) // one entry per user per conversation
@@ -83,7 +83,7 @@ model Message {
   isRead    Boolean     @default(false) // 👈 Add this line
   // Relations
   senderId  String
-  sender    User        @relation("UserMessages", fields: [senderId], references: [id])
+  sender    User        @relation("UserMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])

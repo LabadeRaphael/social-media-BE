@@ -302,9 +302,12 @@ export class UsersService {
     console.log(user);
 
     if (!user) throw new ForbiddenException('User not found');
-
-    const passwordMatches = await bcrypt.compare(password, user.password);
-    if (!passwordMatches) throw new ForbiddenException('Incorrect password');
+    await this.authHelper.verifyPasswordOrThrow(
+      user.id,
+      password
+    );
+    // const passwordMatches = await bcrypt.compare(password, user.password);
+    // if (!passwordMatches) throw new ForbiddenException('Incorrect password');
 
     // Soft delete
     const deleteAccount = await this.prisma.user.update({
@@ -321,6 +324,12 @@ export class UsersService {
       }
 
     });
+    const deletionWarningState = await this.prisma.user.update({
+      where: { id: userId },
+      data: { deletionWarningSent: false },
+    })
+    console.log("deletionWarningState",deletionWarningState);
+    
     console.log(deleteAccount);
 
     return deleteAccount
@@ -371,5 +380,6 @@ export class UsersService {
   //     },
   //   });
   // }
+ 
 }
 

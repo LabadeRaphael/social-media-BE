@@ -22,15 +22,17 @@ export class AuthHelper {
       if (!freshUser.deletedAt) {
         throw new ForbiddenException("Invalid account state.");
       }
+      const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
+      // const deletedAt = new Date(Date.now() - 29 * MS_PER_DAY);
       const deletedAt = new Date(freshUser.deletedAt);
       const diffInMs = now.getTime() - deletedAt.getTime();
-      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+      const diffInDays = Math.floor(diffInMs / MS_PER_DAY);
 
       const remainingDays = Math.max(0, 30 - diffInDays);
       if (remainingDays <= 0) {
         throw new ForbiddenException(
-          "Your account has been permanently deleted."
+          "Your account has been permanently deleted. Kindly sign up"
         );
       }
       throw new ForbiddenException(
