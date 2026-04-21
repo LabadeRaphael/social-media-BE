@@ -34,6 +34,7 @@ model User {
   blockedUsers        User[]                @relation("UserBlocks")
   blockedBy           User[]                @relation("UserBlocks")
   RecoverAccountToken RecoverAccountToken[]
+  EmailChangeToken    EmailChangeToken[]
 }
 
 model RefreshToken {
@@ -105,6 +106,17 @@ model PasswordResetToken {
 }
 
 model RecoverAccountToken {
+  id          String   @id @default(uuid())
+  hashedToken String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+
+  @@index([userId, hashedToken])
+}
+model EmailChangeToken {
   id          String   @id @default(uuid())
   hashedToken String   @unique
   userId      String

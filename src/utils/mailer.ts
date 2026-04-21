@@ -139,7 +139,7 @@ const sendWarningRecoverAccount = (to: string, token: string) => {
   return transporter.sendMail(mailOptions);
 };
 const sendEmailChangeVerification = (to: string, token: string) => {
-  const verifyUrl = `${process.env.FRONTEND_URL}/auth/confirm-email-change?token=${token}`;
+  const verifyUrl = `${process.env.FRONTEND_URL}/auth/verify-email-change?token=${token}`;
 
   const mailOptions = {
     from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,

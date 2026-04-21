@@ -66,8 +66,7 @@ export class UsersService {
     }
   }
 
-  async findByEmail(forgotPsw: ForgotPswDto) {
-    const { email } = forgotPsw;
+  async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
     });
@@ -90,7 +89,15 @@ export class UsersService {
       },
     });
   }
-
+  async saveEmailChangeToken(userId: string, hashedEmailChangeToken: string, expiresAt: Date) {
+    return this.prisma.emailChangeToken.create({
+      data: {
+       hashedToken: hashedEmailChangeToken,
+        userId,
+        expiresAt
+      },
+    });
+  }
   async findResetToken(userId: string) {
     console.log("userId", userId);
 
@@ -328,8 +335,8 @@ export class UsersService {
       where: { id: userId },
       data: { deletionWarningSent: false },
     })
-    console.log("deletionWarningState",deletionWarningState);
-    
+    console.log("deletionWarningState", deletionWarningState);
+
     console.log(deleteAccount);
 
     return deleteAccount
@@ -340,8 +347,24 @@ export class UsersService {
       where: { userId },
     });
   }
+  async deleteEmailChangeToken(userId: string) {
+    return this.prisma.emailChangeToken.deleteMany({
+      where: { userId },
+    });
+  }
   async findRecoverToken(userId: string) {
     return this.prisma.recoverAccountToken.findFirst({
+      where: {
+        userId,
+        used: false,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+  async findEmailChangeToken(userId: string) {
+    return this.prisma.emailChangeToken.findFirst({
       where: {
         userId,
         used: false,
@@ -371,6 +394,25 @@ export class UsersService {
       },
     });
   }
+  async updateChangeEmailState(userId: string) {
+    return this.prisma.emailChangeToken.updateMany({
+      where: {
+        userId,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+  }
+  async updateEmail(userId: string, newEmail: string) {
+  return this.prisma.user.update({
+    where: { id: userId },
+    data: {
+      email: newEmail,
+    },
+  });
+}
   // async resetFailedAttempts(userId: string) {
   //   return this.prisma.user.update({
   //     where: { id: userId },
@@ -380,6 +422,6 @@ export class UsersService {
   //     },
   //   });
   // }
- 
+
 }
 

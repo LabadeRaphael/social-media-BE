@@ -14,6 +14,7 @@ import * as ms from 'ms';
 import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
+import { VerifyEmailChangeDto } from './dto/verify-email-change';
 
 @Controller('auth')
 export class AuthController {
@@ -133,15 +134,24 @@ export class AuthController {
       throw new UnauthorizedException('Access token invalid or expired');
     }
   }
-  @Put('request-email-change')
+  @Post('request-email-change')
   requestEmailChange(
-    @Req() req:Request & { user: { sub: string }},
+    @Req() req: Request & { user: { sub: string } },
     @Body() dto: RequestEmailChangeDto,
   ) {
     console.log("i dey here");
-    
+
     const userId = req?.user?.sub
-    return this.authService.requestEmailChange(userId, dto.newEmail);
+    return this.authService.requestEmailChange(userId, dto);
+  }
+ 
+  @AllowAnonymous()
+  @Post('verify-email-change')
+  async verifyEmailChange
+    (@Body() token: VerifyEmailChangeDto) {
+    console.log("verify-email-change");
+    
+    return this.authService.verifyEmailChange(token);
   }
 
 }
