@@ -1,3 +1,4 @@
+import { Query } from '@nestjs/common';
 // import { Injectable } from '@nestjs/common';
 // import { PrismaService } from '../prisma/prisma.service';
 // import { ConversationDto } from './dto/conversations.dto';
@@ -249,26 +250,29 @@ export class ConversationService {
   //     },
   //   });
   // }
+
+
   // conversation.service.ts
-  async getMessages(conversationId: string,  userId: string, skip: number, take: number) {
+  async getMessages(conversationId: string, userId: string, skip: number, take: number) {
     const participant = await this.prisma.participant.findUnique({
-    where: {
-      userId_conversationId: {
-        userId,
-        conversationId,
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId,
+        },
       },
-    },
-   });
-    return await this.prisma.message.findMany({
-      where: { 
-        conversationId,
-        ...(participant?.clearedAt && {
-          createdAt: {
-            gt: participant.clearedAt,
-          },
-        }),
-      },
-      orderBy: { createdAt: 'asc' }, // latest first
+    });
+    const where = {
+      conversationId,
+      ...(participant?.clearedAt && {
+        createdAt: {
+          gt: participant.clearedAt,
+        },
+      }),
+    };
+    const messages = await this.prisma.message.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }, // latest first
       skip,
       take,
       select: {
@@ -283,9 +287,16 @@ export class ConversationService {
         sender: { select: { id: true, userName: true, email: true } },
       },
     });
+    const totalMessages = await this.prisma.message.count({
+      where,
+    });
+    return {
+      messages: messages.reverse(),
+      hasMore: skip + take < totalMessages,
+    }
   }
   async resetUnreadCount(conversationId: string, userId?: string) {
-    console.log("the convffd", conversationId);
+    console.log("the conv", conversationId);
 
     return this.prisma.participant.updateMany({
       where: { conversationId, userId },
@@ -316,6 +327,33 @@ export class ConversationService {
       success: result.count > 0,
       clearedAt: now,
     };
+  }
+
+  async searchConversationMessages(
+    conversationId: string,
+    query: string,
+    userId: string,
+  ) {
+    console.log({
+      conversationId,
+      query,
+      userId,
+    });
+    const result = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        text: {
+          contains: query,
+          mode: "insensitive",
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+    console.log(result);
+    return result
+
   }
 
 }

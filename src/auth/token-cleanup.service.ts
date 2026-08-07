@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { sendWarningRecoverAccount } from 'src/utils/mailer';
 import { AuthService } from './auth.service';
-import { removeAllListeners } from 'process';
+// import { removeAllListeners } from 'process';
 
 @Injectable()
 export class TokenCleanupService {
@@ -26,7 +26,7 @@ export class TokenCleanupService {
     }
   }
   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
-  @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron(CronExpression.EVERY_DAY_AT_10AM)
   async handleDeletedAccounts() {
     const users = await this.prisma.user.findMany({
       where: {

@@ -36,7 +36,7 @@ export class UsersController {
     return await this.userService.getUserByUsername(normalized, currentUserId);
 
   }
-
+  
   @Get('profile')
   async getCurrentUser(@Req() req: Request & { user?: { sub: string } }) {
     const currentUserId = req.user?.sub;

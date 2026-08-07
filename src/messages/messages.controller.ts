@@ -1,6 +1,6 @@
 import {
-    BadRequestException, UploadedFile,
-    UseInterceptors, Body, Controller, Post, Req
+  BadRequestException, UploadedFile,
+  UseInterceptors, Body, Controller, Post, Req
 } from '@nestjs/common';
 import { MessageDto } from './dto/messages.dto';
 import { MessageService } from './messages.service';
@@ -10,83 +10,83 @@ import { multerConfig } from 'src/config/multer.config';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 @Controller()
 export class MessageController {
-    constructor(
-        private readonly messageService: MessageService,
-        private readonly cloudinaryService: CloudinaryService
-    ) { }
-    @Post('messages')
-    async sendMessage(
-        @Req() req: Request & { user: { sub: string } },
-        @Body() message: MessageDto) {
-        const senderId = req.user.sub;
-        return this.messageService.sendMessage(message, senderId);
-    }
-    @Post('mark-read')
-    async markAsRead(@Body() body: { conversationId: string }, @Req() req: Request & { user: { sub: string } }) {
-        const userId = req.user?.sub; // or however you get it from JWT
-        console.log(userId);
-
-        return this.messageService.markMessagesAsRead(body.conversationId, userId);
-    }
-    @Post('messages/voice')
-    @UseInterceptors(FileInterceptor('file', multerConfig))
-    async uploadVoice(
-        @UploadedFile() file: Express.Multer.File,
-        @Req() req: Request & { user: { sub: string } },
-        @Body() body: { conversationId: string }
-    ) {
-        if (!file) throw new BadRequestException('No file uploaded');
-        const senderId = req?.user.sub;
-        // const conversationId = body.conversationId;
-        // Upload audio file to Cloudinary
-        const uploadResult = await this.cloudinaryService.uploadFile(file);
-        if (('secure_url' in uploadResult)) {            
-            // Save message record in database
-            const dto: MessageDto = {
-                conversationId: body.conversationId,
-                type: 'VOICE',
-                text: null,
-                duration:uploadResult.duration,
-                mediaUrl: uploadResult.secure_url,
-            };
-            return this.messageService.sendMessage(dto, senderId)
-
-        } else {
-            throw new BadRequestException('Cloudinary upload failed');
-        }
-
-    }
-    @Post('messages/document')
-@UseInterceptors(FileInterceptor('file', multerConfig))
-async uploadDocument(
-  @UploadedFile() file: Express.Multer.File,
-  @Req() req: Request & { user: { sub: string } },
-  @Body() body: { conversationId: string }
-) {
-  if (!file) {
-    throw new BadRequestException('No file uploaded');
+  constructor(
+    private readonly messageService: MessageService,
+    private readonly cloudinaryService: CloudinaryService
+  ) { }
+  @Post('messages')
+  async sendMessage(
+    @Req() req: Request & { user: { sub: string } },
+    @Body() message: MessageDto) {
+    const senderId = req.user.sub;
+    return this.messageService.sendMessage(message, senderId);
   }
+  @Post('mark-read')
+  async markAsRead(@Body() body: { conversationId: string }, @Req() req: Request & { user: { sub: string } }) {
+    const userId = req.user?.sub; // or however you get it from JWT
+    console.log(userId);
 
-  const senderId = req.user.sub;
-
-  // Upload file to Cloudinary or S3
-  const uploadResult = await this.cloudinaryService.uploadFile(file);
-
-  if (!('secure_url' in uploadResult)) {
-    throw new BadRequestException('Cloudinary upload failed');
+    return this.messageService.markMessagesAsRead(body.conversationId, userId);
   }
+  @Post('messages/voice')
+  @UseInterceptors(FileInterceptor('file', multerConfig))
+  async uploadVoice(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request & { user: { sub: string } },
+    @Body() body: { conversationId: string }
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const senderId = req?.user.sub;
+    // const conversationId = body.conversationId;
+    // Upload audio file to Cloudinary
+    const uploadResult = await this.cloudinaryService.uploadFile(file);
+    if (('secure_url' in uploadResult)) {
+      // Save message record in database
+      const dto: MessageDto = {
+        conversationId: body.conversationId,
+        type: 'VOICE',
+        text: null,
+        duration: uploadResult.duration,
+        mediaUrl: uploadResult.secure_url,
+      };
+      return this.messageService.sendMessage(dto, senderId)
 
-  const dto: MessageDto = {
-    conversationId: body.conversationId,
-    type: 'DOCUMENT',
-    text: null,
-    mediaUrl: uploadResult.secure_url,
-    fileName: file.originalname,
-    fileSize: file.size,
-    fileType: file.mimetype,
-  };
+    } else {
+      throw new BadRequestException('Cloudinary upload failed');
+    }
 
-  return this.messageService.sendMessage(dto, senderId);
-}
+  }
+  @Post('messages/document')
+  @UseInterceptors(FileInterceptor('file', multerConfig))
+  async uploadDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request & { user: { sub: string } },
+    @Body() body: { conversationId: string }
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const senderId = req.user.sub;
+
+    // Upload file to Cloudinary or S3
+    const uploadResult = await this.cloudinaryService.uploadFile(file);
+
+    if (!('secure_url' in uploadResult)) {
+      throw new BadRequestException('Cloudinary upload failed');
+    }
+
+    const dto: MessageDto = {
+      conversationId: body.conversationId,
+      type: 'DOCUMENT',
+      text: null,
+      mediaUrl: uploadResult.secure_url,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileType: file.mimetype,
+    };
+
+    return this.messageService.sendMessage(dto, senderId);
+  }
 
 }

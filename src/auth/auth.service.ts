@@ -120,8 +120,8 @@ export class AuthService {
   private async generateChangeEmailToken(user: User, newEmail: string) {
     return this.signToken(
       user.id,
-      this.authConfiguration.jwtResetPswExpiration!, // better rename later
-      this.authConfiguration.jwtRecoverAccountSecret!,
+      this.authConfiguration.jwtChangeEmailExpiration!,
+      this.authConfiguration.jwtChangeEmailSecret!,
       {
         newEmail,
       }
@@ -464,7 +464,7 @@ export class AuthService {
     try {
       // 1. Verify JWT
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.authConfiguration.jwtRecoverAccountSecret,
+        secret: this.authConfiguration.jwtChangeEmailSecret,
         audience: this.authConfiguration.jwtAudience,
         issuer: this.authConfiguration.jwtIssuer,
       });

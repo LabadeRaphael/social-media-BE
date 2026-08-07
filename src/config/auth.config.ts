@@ -4,10 +4,12 @@ export default registerAs('auth', () => ({
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtResetPswSecret: process.env.JWT_RESETPSW_SECRET,
+  jwtChangeEmailSecret: process.env.JWT_CHANGE_EMAIL_SECRET,
   jwtRecoverAccountSecret: process.env.JWT_RECOVER_ACT_SECRET,
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION,
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION,
   jwtResetPswExpiration: process.env.JWT_RESETPSW_EXPIRATION,
+  jwtChangeEmailExpiration: process.env.JWT_CHANGE_EMAIL_EXPIRATION,
   jwtAudience: process.env.JWT_TOKEN_AUDIENCE || 'nestfinity',
   jwtIssuer: process.env.JWT_TOKEN_ISSUER || 'nestfinity',
 }));

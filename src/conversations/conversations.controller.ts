@@ -36,7 +36,7 @@ export class ConversationController {
 async getMessages(
   @Param('conversationId') conversationId: string,
   @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
-  @Query('take', new DefaultValuePipe(980), ParseIntPipe) take: number,
+  @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
   @Req() req:Request & { user: { sub: string } }
 ) {
   const userId = req.user.sub;
@@ -63,5 +63,22 @@ async clearChat(
   const userId = req.user.sub
   return this.conversationService.clearChat(conversationId, userId);
 }
+
+@Get('conversations/:conversationId/messages/search')
+searchConversationMessages(
+  @Param('conversationId') conversationId: string,
+  @Query('q') query: string,
+  @Req() req:Request & { user:{sub:string}},
+) {
+  console.log("search here");
+  
+  const userId = req.user.sub
+  return this.conversationService.searchConversationMessages(
+    conversationId,
+    query,
+    userId,
+  );
+}
+
 
 }

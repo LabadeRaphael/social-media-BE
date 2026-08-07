@@ -259,13 +259,16 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
         const senderSocketId = socket.id;
         console.log("socket", senderSocketId);
-
+        // if (condition) {
+            
+        // }
         if (receiverSocketId) {
             console.log("sender", senderId);
             this.server.to(senderSocketId).emit('receive_message', message);
             this.server.to(receiverSocketId).emit('receive_message', message);
             console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
         } else {
+            this.server.to(senderSocketId).emit('receive_message', message);
             console.log(`⚠️ Receiver ${data.receiverId} is offline. Message saved only.`);
         }
 
