@@ -1,5 +1,5 @@
 import { sendEmailChangeVerification, sendRecoverAccountEmail, sendResetPasswordEmail, sendWarningRecoverAccount } from './../utils/mailer';
-import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException, HttpException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -208,26 +208,18 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException("User no found")
     }
-    if (!user?.isDeleted) {
+    if (!user.isDeleted) {
       const resetPswToken = await this.generateResetToken(user)
       await sendResetPasswordEmail(user.email, resetPswToken);
       console.log(`Recover requested for active account: ${recoverAct.email}`);
       // throw new BadRequestException("Account is active. Please use password reset instead.")
     }
+    console.log("Recover requested for active account");
+      
     await this.generateAndSendRecoverToken(user, {
       expiresIn: '15m',
       emailType: 'recover',
     })
-
-    // const recoverActToken = await this.generateRecoverActToken(user)
-    // console.log("recoverActToken", recoverActToken);
-    // const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
-    // const hashedToken = await bcrypt.hash(recoverActToken, 10);
-
-    // await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
-    // // Send email with nodemailer util
-    // await sendRecoverAccountEmail(user.email, recoverActToken);
-
   }
 
   async resetPassword(resetPsw: ResetPasswordDto) {
@@ -266,6 +258,9 @@ export class AuthService {
       await this.usersService.updateTokenState(userId);
       await this.usersService.deleteAllRefreshTokens(userId)
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error.name === 'TokenExpiredError') {
         throw new BadRequestException('Reset token has expired. Please request a new one.');
       } else if (error.name === 'JsonWebTokenError') {
@@ -276,188 +271,94 @@ export class AuthService {
     }
 
   }
-  // async verifyRecoverAccount(dto: VerifyActDto) {
-  //   const { token } = dto;
-  //   console.log("token", token);
-
-  //   if (!token) {
-  //     throw new BadRequestException('Invalid recovery token');
-  //   }
-
-  //   try {
-  //     //  1. Verify JWT
-  //     const payload = await this.jwtService.verifyAsync(token, {
-  //       secret: this.authConfiguration.jwtRecoverAccountSecret,
-  //       audience: this.authConfiguration.jwtAudience,
-  //       issuer: this.authConfiguration.jwtIssuer,
-  //     });
-
-  //     const userId = payload.sub;
-
-  //     // 2. Get user
-  //     const user = await this.usersService.findById(userId);
-  //     if (!user) {
-  //       throw new UnauthorizedException('Invalid token or user not found');
-  //     }
-
-  //     // 🔍 4. Get stored token from DB
-  //     const tokenRecord = await this.usersService.findRecoverToken(userId);
-
-  //     if (!tokenRecord) {
-  //       console.log("token error", tokenRecord);
-
-  //       throw new BadRequestException(
-  //         'This recovery link is invalid or has already been used.',
-  //       );
-  //     }
-  //     console.log("tokenRecord", tokenRecord);
-
-  //     //  5. Compare token with hashed version
-  //     const match = await bcrypt.compare(
-  //       token,
-  //       tokenRecord.hashedToken,
-  //     );
-
-  //     if (!match) {
-  //       throw new ForbiddenException('Invalid recovery token');
-  //     }
-
-  //     if (tokenRecord.used) {
-  //       throw new BadRequestException(
-  //         'Recovery link already used. Please request a new one.',
-  //       );
-  //     }
-  //     // Expiry check 
-  //     if (tokenRecord.expiresAt < new Date()) {
-  //       console.log("here", tokenRecord.expiresAt);
-
-  //       throw new GoneException(
-  //         'Recovery link has expired. Please request a new one.',
-  //       );
-  //     }
-  //     // 3. Check if already active
-  //     if (!user.deletedAt) {
-  //       return {
-  //         status: true,
-  //         message: "Account already active. You can log in.",
-  //       };
-  //     }
-
-  //     // 7. Restore account
-  //     await this.usersService.restoreAccount(userId);
-
-  //     // 8. Mark token as used
-  //     await this.usersService.updateRecoverTokenState(userId);
-
-  //     // 9. Optional (VERY GOOD): invalidate sessions
-  //     await this.usersService.deleteAllRefreshTokens(userId);
-  //     const deleteOldToken = await this.usersService.deleteRecoverToken(user.id)
-  //     console.log("deleteOldToken", deleteOldToken);
-  //     return {
-  //       status: true,
-  //       message: 'Account successfully restored',
-  //     };
-  //   } catch (error) {
-  //     if (error.name === 'TokenExpiredError') {
-  //       console.log("issue", error.name);
-
-  //       throw new BadRequestException(
-  //         'Recovery link has expired. Please request a new one.',
-  //       );
-  //     } else if (error.name === 'JsonWebTokenError') {
-  //       console.log("from here", error.name);
-
-  //       throw new BadRequestException('Invalid recovery token.');
-  //     } else {
-  //       throw new BadRequestException(error.message || 'An error occurred.');
-  //     }
-  //   }
-  // }
   async verifyRecoverAccount(dto: VerifyActDto) {
-  const { token } = dto;
+    const { token } = dto;
 
-  try {
-    // 1. Verify JWT
-    const payload = await this.jwtService.verifyAsync(token, {
-      secret: this.authConfiguration.jwtRecoverAccountSecret,
-      audience: this.authConfiguration.jwtAudience,
-      issuer: this.authConfiguration.jwtIssuer,
-    });
+    try {
+      // 1. Verify JWT
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: this.authConfiguration.jwtRecoverAccountSecret,
+        audience: this.authConfiguration.jwtAudience,
+        issuer: this.authConfiguration.jwtIssuer,
+      });
 
-    const userId = payload.sub;
+      const userId = payload.sub;
 
-    // 2. Get user
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException('Invalid recovery token or user not found');
-    }
+      // 2. Get user
+      const user = await this.usersService.findById(userId);
+      if (!user) {
+        throw new UnauthorizedException('Invalid recovery token or user not found');
+      }
 
-    // 3. If already active → exit early (IMPORTANT OPTIMIZATION)
-    if (!user.deletedAt) {
+      // 3. If already active → exit early (IMPORTANT OPTIMIZATION)
+      if (!user.deletedAt) {
+        return {
+          status: true,
+          message: "Account already active. You can log in.",
+        };
+      }
+
+      // 4. Get stored token
+      const tokenRecord = await this.usersService.findRecoverToken(userId);
+
+      if (!tokenRecord) {
+        throw new BadRequestException(
+          'Recovery link is invalid or already used.',
+        );
+      }
+
+      // 5. Validate token hash
+      const match = await bcrypt.compare(token, tokenRecord.hashedToken);
+
+      if (!match) {
+        throw new ForbiddenException('Invalid recovery token');
+      }
+
+      // 6. Check used
+      if (tokenRecord.used) {
+        throw new BadRequestException(
+          'Recovery link already used. Please request a new one.',
+        );
+      }
+
+      // 7. Check expiry
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new GoneException(
+          'Recovery link has expired. Please request a new one.',
+        );
+      }
+
+      // 8. Restore account
+      await this.usersService.restoreAccount(userId);
+
+      // 9. Mark token used
+      await this.usersService.updateRecoverTokenState(userId);
+
+      // 10. Security cleanup
+      await this.usersService.deleteAllRefreshTokens(userId);
+      await this.usersService.deleteRecoverToken(userId);
+
       return {
         status: true,
-        message: "Account already active. You can log in.",
+        message: 'Account successfully restored',
       };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error.name === 'TokenExpiredError') {
+        throw new BadRequestException(
+          'Recovery link has expired. Please request a new one.',
+        );
+      }
+
+      if (error.name === 'JsonWebTokenError') {
+        throw new BadRequestException('Invalid recovery token.');
+      }
+
+      throw new BadRequestException(error.message || 'An error occurred.');
     }
-
-    // 4. Get stored token
-    const tokenRecord = await this.usersService.findRecoverToken(userId);
-
-    if (!tokenRecord) {
-      throw new BadRequestException(
-        'Recovery link is invalid or already used.',
-      );
-    }
-
-    // 5. Validate token hash
-    const match = await bcrypt.compare(token, tokenRecord.hashedToken);
-
-    if (!match) {
-      throw new ForbiddenException('Invalid recovery token');
-    }
-
-    // 6. Check used
-    if (tokenRecord.used) {
-      throw new BadRequestException(
-        'Recovery link already used. Please request a new one.',
-      );
-    }
-
-    // 7. Check expiry
-    if (tokenRecord.expiresAt < new Date()) {
-      throw new GoneException(
-        'Recovery link has expired. Please request a new one.',
-      );
-    }
-
-    // 8. Restore account
-    await this.usersService.restoreAccount(userId);
-
-    // 9. Mark token used
-    await this.usersService.updateRecoverTokenState(userId);
-
-    // 10. Security cleanup
-    await this.usersService.deleteAllRefreshTokens(userId);
-    await this.usersService.deleteRecoverToken(userId);
-
-    return {
-      status: true,
-      message: 'Account successfully restored',
-    };
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      throw new BadRequestException(
-        'Recovery link has expired. Please request a new one.',
-      );
-    }
-
-    if (error.name === 'JsonWebTokenError') {
-      throw new BadRequestException('Invalid recovery token.');
-    }
-
-    throw new BadRequestException(error.message || 'An error occurred.');
   }
-}
   async verifyEmailChange(dto: VerifyEmailChangeDto) {
     const { token } = dto;
 

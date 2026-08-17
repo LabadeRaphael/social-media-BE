@@ -380,6 +380,7 @@ export class UsersService {
       data: {
         deletedAt: null,
         isDeleted: false,
+        deletionWarningSent: false,
       },
     });
   }

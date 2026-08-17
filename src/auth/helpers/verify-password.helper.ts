@@ -17,6 +17,7 @@ export class AuthHelper {
       where: { id: userId },
     });
     if (freshUser?.isDeleted) {
+    
       const now = new Date();
 
       if (!freshUser.deletedAt) {

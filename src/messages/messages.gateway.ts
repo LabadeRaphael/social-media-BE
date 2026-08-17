@@ -73,6 +73,7 @@ import { Server, Socket } from 'socket.io';
 import { MessageService } from './messages.service';
 import { JwtService } from '@nestjs/jwt';
 import * as cookie from 'cookie'; // ✅ new import
+import { NotFoundException } from '@nestjs/common';
 @WebSocketGateway({
     cors: {
         origin: 'http://localhost:3000', // your Next.js URL
@@ -185,147 +186,360 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
     /**
      * Handle sending messages
      */
+    // @SubscribeMessage('send_message')
+    // async handleMessage(
+    //     @MessageBody() data: {
+    //         text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE' | 'DOCUMENT'; mediaUrl?: string | null, duration?: number | null, fileName?: string | null;
+    //         fileSize?: number | null;
+    //         fileType?: string | null;
+    //     },
+    //     @ConnectedSocket() socket: Socket,
+    // ) {
+    //     const senderId = (socket as any).userId;
+    //     if (!senderId) return socket.emit('error', 'Unauthorized');
+    //     console.log("sendMessageData", data);
+    //     let message;
+    //     const result = await this.messageService.canSendMessage(
+    //         data.conversationId,
+    //         senderId
+    //     );
+    //     console.log(!result.allowed);
+
+    //     if (!result.allowed) {
+    //         // console.log("djjdjd");
+    //         console.log(result.reason);
+    //         return socket.emit('message_blocked', result.reason);
+    //         // return result
+    //         // return socket.emit('message_blocked', result.reason);
+    //     }
+    //     // const receiver = await this.userM.findById(receiverId);
+    //     // if (receiver.blockedUsers.includes(senderId)) {
+    //     //     throw new ForbiddenException("You cannot message this user");
+    //     // }
+
+    //     // const sender = await this.userModel.findById(senderId);
+
+    //     // if (sender.blockedUsers.includes(receiverId)) {
+    //     //     throw new ForbiddenException("You blocked this user");
+    //     // }
+    //     else if (data.type === 'TEXT') {
+    //         console.log("Mr text");
+
+    //         message = await this.messageService.sendMessage({
+    //             text: data.text,
+    //             type: 'TEXT',
+    //             conversationId: data.conversationId
+    //         }, senderId);
+    //     } else if (data.type === 'VOICE') {
+    //         console.log("Mr voice");
+    //         message = {
+    //             text: null,
+    //             type: 'VOICE',
+    //             mediaUrl: data.mediaUrl,
+    //             duration: data.duration,
+
+    //             conversationId: data.conversationId,
+    //             senderId,
+    //         };
+
+    //     }
+    //     // DOCUMENT
+    //     else if (data.type === 'DOCUMENT') {
+    //         message = {
+    //             type: 'DOCUMENT',
+    //             mediaUrl: data.mediaUrl,
+    //             fileName: data.fileName,
+    //             fileSize: data.fileSize,
+    //             fileType: data.fileType,
+    //             conversationId: data.conversationId,
+    //             senderId,
+    //         };
+    //     }
+    //     const receiverSocketId = this.onlineUsers.get(data.receiverId);
+    //     console.log("receiverId", receiverSocketId);
+
+    //     const senderSocketId = socket.id;
+    //     console.log("socket", senderSocketId);
+    //     // if (condition) {
+
+    //     // }
+    //     if (receiverSocketId) {
+    //         console.log("sender", senderId);
+    //         this.server.to(senderSocketId).emit('receive_message', message);
+    //         this.server.to(receiverSocketId).emit('receive_message', message);
+    //         console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
+    //     } else {
+    //         this.server.to(senderSocketId).emit('receive_message', message);
+    //         console.log(`⚠️ Receiver ${data.receiverId} is offline. Message saved only.`);
+    //     }
+
+
+    // }
     @SubscribeMessage('send_message')
     async handleMessage(
-        @MessageBody() data: {
-            text: string; receiverId: string, conversationId: string, type?: 'TEXT' | 'VOICE' | 'DOCUMENT'; mediaUrl?: string | null, duration?: number | null, fileName?: string | null;
+        @MessageBody()
+        data: {
+            text?: string;
+            conversationId: string;
+            type?: 'TEXT' | 'VOICE' | 'DOCUMENT';
+            mediaUrl?: string | null;
+            duration?: number | null;
+            fileName?: string | null;
             fileSize?: number | null;
             fileType?: string | null;
         },
         @ConnectedSocket() socket: Socket,
     ) {
+        // 1. Get the authenticated user from JWT
         const senderId = (socket as any).userId;
-        if (!senderId) return socket.emit('error', 'Unauthorized');
-        console.log("sendMessageData", data);
-        let message;
+
+        if (!senderId) {
+            return socket.emit('error', 'Unauthorized');
+        }
+
+        // 2. Validate conversation ID
+        if (!data?.conversationId) {
+            return socket.emit(
+                'error',
+                'Conversation ID is required',
+            );
+        }
+
+        // 3. Check message authorization
         const result = await this.messageService.canSendMessage(
             data.conversationId,
-            senderId
+            senderId,
         );
-        console.log(!result.allowed);
-        
+
         if (!result.allowed) {
-            // console.log("djjdjd");
-            console.log(result.reason);
-            return socket.emit('message_blocked', result.reason);
-            // return result
-            // return socket.emit('message_blocked', result.reason);
+            return socket.emit(
+                'message_blocked',
+                result.reason,
+            );
         }
-        // const receiver = await this.userM.findById(receiverId);
-        // if (receiver.blockedUsers.includes(senderId)) {
-        //     throw new ForbiddenException("You cannot message this user");
-        // }
 
-        // const sender = await this.userModel.findById(senderId);
+        // 4. Determine message type
+        const type = data.type ?? 'TEXT';
 
-        // if (sender.blockedUsers.includes(receiverId)) {
-        //     throw new ForbiddenException("You blocked this user");
-        // }
-        else if (data.type === 'TEXT') {
-            console.log("Mr text");
-
-            message = await this.messageService.sendMessage({
-                text: data.text,
-                type: 'TEXT',
-                conversationId: data.conversationId
-            }, senderId);
-        } else if (data.type === 'VOICE') {
-            console.log("Mr voice");
-            message = {
-                text: null,
-                type: 'VOICE',
-                mediaUrl: data.mediaUrl,
-                duration: data.duration,
-
+        // 5. Create the message through the service
+        const message = await this.messageService.sendMessage(
+            {
+                text: data.text ?? null,
+                type,
                 conversationId: data.conversationId,
-                senderId,
-            };
+                mediaUrl: data.mediaUrl ?? null,
+                duration: data.duration ?? null,
+                fileName: data.fileName ?? null,
+                fileSize: data.fileSize ?? null,
+                fileType: data.fileType ?? null,
+            },
+            senderId,
+        );
 
+        // 6. Get the receiver from the authorization result
+        const receiverId = result.receiver?.id;
+        if (!receiverId) {
+           throw new NotFoundException('Receiver not found for message');
         }
-        // DOCUMENT
-        else if (data.type === 'DOCUMENT') {
-            message = {
-                type: 'DOCUMENT',
-                mediaUrl: data.mediaUrl,
-                fileName: data.fileName,
-                fileSize: data.fileSize,
-                fileType: data.fileType,
-                conversationId: data.conversationId,
-                senderId,
-            };
-        }
-        const receiverSocketId = this.onlineUsers.get(data.receiverId);
-        console.log("receiverId", receiverSocketId);
+        const receiverSocketId =
+            this.onlineUsers.get(receiverId);
 
-        const senderSocketId = socket.id;
-        console.log("socket", senderSocketId);
-        // if (condition) {
-            
-        // }
+        // 7. Always send the message back to the sender
+        this.server
+            .to(socket.id)
+            .emit('receive_message', message);
+
+        // 8. Send to receiver if online
         if (receiverSocketId) {
-            console.log("sender", senderId);
-            this.server.to(senderSocketId).emit('receive_message', message);
-            this.server.to(receiverSocketId).emit('receive_message', message);
-            console.log(`📨 Sent message directly to receiver ${data.receiverId}`);
+            this.server
+                .to(receiverSocketId)
+                .emit('receive_message', message);
+
+            console.log(
+                `📨 Message sent from ${senderId} to ${receiverId}`,
+            );
         } else {
-            this.server.to(senderSocketId).emit('receive_message', message);
-            console.log(`⚠️ Receiver ${data.receiverId} is offline. Message saved only.`);
+            console.log(
+                `⚠️ Receiver ${receiverId} is offline. Message saved.`,
+            );
         }
-
-
     }
+    // @SubscribeMessage('mark_as_read')
+    // async handleMarkAsRead(
+    //     @MessageBody() conversationId: string,
+    //     @ConnectedSocket() socket: Socket,
+    // ) {
+    //     const userId = (socket as any).userId;
+    //     if (!userId) return;
+
+    //     // Mark messages as read in DB
+    //     await this.messageService.markMessagesAsRead(conversationId, userId);
+
+    //     // Broadcast to everyone in the conversation
+    //     this.server.to(conversationId).emit('messages_read', { conversationId, userId });
+    // }
     @SubscribeMessage('mark_as_read')
     async handleMarkAsRead(
         @MessageBody() conversationId: string,
         @ConnectedSocket() socket: Socket,
     ) {
         const userId = (socket as any).userId;
-        if (!userId) return;
 
-        // Mark messages as read in DB
-        await this.messageService.markMessagesAsRead(conversationId, userId);
+        // 1. Make sure the socket is authenticated
+        if (!userId) {
+            return socket.emit('error', 'Unauthorized');
+        }
 
-        // Broadcast to everyone in the conversation
-        this.server.to(conversationId).emit('messages_read', { conversationId, userId });
+        // 2. Validate conversationId
+        if (!conversationId) {
+            return socket.emit(
+                'error',
+                'Conversation ID is required',
+            );
+        }
+
+        // 3. Check conversation authorization
+        const isParticipant =
+            await this.messageService.isConversationParticipant(
+                conversationId,
+                userId,
+            );
+
+        if (!isParticipant) {
+            return socket.emit(
+                'error',
+                'You are not a participant in this conversation',
+            );
+        }
+
+        // 4. Only authorized users can modify read status
+        await this.messageService.markMessagesAsRead(
+            conversationId,
+            userId,
+        );
+
+        // 5. Notify the conversation
+        this.server.to(conversationId).emit('messages_read', {
+            conversationId,
+            userId,
+        });
     }
     // typing indicator events
-    @SubscribeMessage("typing")
-    handleTyping(
-        @MessageBody() data: { conversationId: string; senderId: string },
-        @ConnectedSocket() socket: Socket
-    ) {
+    // @SubscribeMessage("typing")
+    // handleTyping(
+    //     @MessageBody() data: { conversationId: string; senderId: string },
+    //     @ConnectedSocket() socket: Socket
+    // ) {
 
-        // broadcast to others in the same conversation
-        socket.to(data.conversationId).emit("user_typing", {
-            conversationId: data.conversationId,
-            senderId: data.senderId,
-        });
-    }
-
-    @SubscribeMessage("stop_typing")
-    handleStopTyping(
-        @MessageBody() data: { conversationId: string; senderId: string },
-        @ConnectedSocket() socket: Socket
-    ) {
-        socket.to(data.conversationId).emit("user_stop_typing", {
-            conversationId: data.conversationId,
-            senderId: data.senderId,
-        });
-    }
-
-
-    @SubscribeMessage('join_conversation')
-    handleJoinConversation(
-        @MessageBody() conversationId: string,
+    //     // broadcast to others in the same conversation
+    //     socket.to(data.conversationId).emit("user_typing", {
+    //         conversationId: data.conversationId,
+    //         senderId: data.senderId,
+    //     });
+    // }
+    @SubscribeMessage('typing')
+    async handleTyping(
+        @MessageBody() data: { conversationId: string },
         @ConnectedSocket() socket: Socket,
     ) {
         const userId = (socket as any).userId;
-        if (!userId) return socket.emit('error', 'Unauthorized');
 
-        // ✅ optionally check if user is a participant before joining (later step)
-        console.log("the conv", conversationId);
-        socket.join(conversationId);
+        // 1. Make sure the socket is authenticated
+        if (!userId) {
+            return socket.emit('error', 'Unauthorized');
+        }
 
-        console.log(`🔹 User ${userId} joined conversation ${conversationId}`);
+        // 2. Validate conversationId
+        if (!data?.conversationId) {
+            return socket.emit('error', 'Conversation ID is required');
+        }
+
+        // 3. Check that the authenticated user
+        //    belongs to this conversation
+        const isParticipant =
+            await this.messageService.isConversationParticipant(
+                data.conversationId,
+                userId,
+            );
+
+        if (!isParticipant) {
+            return socket.emit(
+                'error',
+                'You are not a participant in this conversation',
+            );
+        }
+
+        // 4. Broadcast using the identity obtained
+        //    from the authenticated socket
+        socket.to(data.conversationId).emit('user_typing', {
+            conversationId: data.conversationId,
+            senderId: userId,
+        });
     }
+
+    // @SubscribeMessage("stop_typing")
+    // handleStopTyping(
+    //     @MessageBody() data: { conversationId: string; senderId: string },
+    //     @ConnectedSocket() socket: Socket
+    // ) {
+    //     socket.to(data.conversationId).emit("user_stop_typing", {
+    //         conversationId: data.conversationId,
+    //         senderId: data.senderId,
+    //     });
+    // }
+    @SubscribeMessage('stop_typing')
+    async handleStopTyping(
+        @MessageBody() data: { conversationId: string },
+        @ConnectedSocket() socket: Socket,
+    ) {
+        const userId = (socket as any).userId;
+
+        // 1. Make sure the socket is authenticated
+        if (!userId) {
+            return socket.emit('error', 'Unauthorized');
+        }
+
+        // 2. Validate conversationId
+        if (!data?.conversationId) {
+            return socket.emit('error', 'Conversation ID is required');
+        }
+
+        // 3. Check that the authenticated user
+        //    belongs to this conversation
+        const isParticipant =
+            await this.messageService.isConversationParticipant(
+                data.conversationId,
+                userId,
+            );
+
+        if (!isParticipant) {
+            return socket.emit(
+                'error',
+                'You are not a participant in this conversation',
+            );
+        }
+
+        // 4. Use the authenticated user ID
+        //    instead of trusting the client
+        socket.to(data.conversationId).emit('user_stop_typing', {
+            conversationId: data.conversationId,
+            senderId: userId,
+        });
+    }
+
+
+    // @SubscribeMessage('join_conversation')
+    // handleJoinConversation(
+    //     @MessageBody() conversationId: string,
+    //     @ConnectedSocket() socket: Socket,
+    // ) {
+    //     const userId = (socket as any).userId;
+    //     if (!userId) return socket.emit('error', 'Unauthorized');
+
+    //     // ✅ optionally check if user is a participant before joining (later step)
+    //     console.log("the conv", conversationId);
+    //     socket.join(conversationId);
+
+    //     console.log(`🔹 User ${userId} joined conversation ${conversationId}`);
+    // }
 }

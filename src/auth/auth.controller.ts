@@ -139,7 +139,7 @@ export class AuthController {
     @Req() req: Request & { user: { sub: string } },
     @Body() dto: RequestEmailChangeDto,
   ) {
-    console.log("i dey here");
+    console.log("request-email-change");
 
     const userId = req?.user?.sub
     return this.authService.requestEmailChange(userId, dto);

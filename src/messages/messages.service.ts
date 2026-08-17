@@ -172,7 +172,24 @@ export class MessageService {
   //     data: { lastMessageId: message.id },
   //   });
   // }
+  async isConversationParticipant(
+    conversationId: string,
+    userId: string,
+  ){
+    const participant = await this.prisma.participant.findUnique({
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
 
+    return !!participant;
+  }
 
 
 
