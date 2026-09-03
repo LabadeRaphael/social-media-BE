@@ -279,6 +279,7 @@ export class ConversationService {
         id: true,
         text: true,
         type: true,
+        duration:true,
         mediaUrl: true,
         fileName: true,
         fileSize: true,

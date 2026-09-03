@@ -7,8 +7,6 @@ export class MessageDto {
   conversationId: string;
 
   
-
-  // message text (for TEXT) or URL/path (for IMAGE/FILE/VOICE)
   @IsOptional()
   @IsString()
   text?: string|null;
@@ -23,6 +21,7 @@ export class MessageDto {
   mediaUrl?: string|null;
   
   @IsOptional()
+  @IsNumber()
   duration?: number|null;
   
   // for document

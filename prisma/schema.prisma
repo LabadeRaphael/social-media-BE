@@ -75,7 +75,7 @@ model Message {
   id        String      @id @default(uuid())
   text      String?
   mediaUrl  String?
-  duration  Int?
+  duration  Float?
   fileName  String?
   fileSize  Int?
   fileType  String?

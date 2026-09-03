@@ -28,33 +28,61 @@ export class MessageController {
 
     return this.messageService.markMessagesAsRead(body.conversationId, userId);
   }
-  @Post('messages/voice')
-  @UseInterceptors(FileInterceptor('file', multerConfig))
-  async uploadVoice(
-    @UploadedFile() file: Express.Multer.File,
-    @Req() req: Request & { user: { sub: string } },
-    @Body() body: { conversationId: string }
-  ) {
-    if (!file) throw new BadRequestException('No file uploaded');
-    const senderId = req?.user.sub;
-    // const conversationId = body.conversationId;
-    // Upload audio file to Cloudinary
-    const uploadResult = await this.cloudinaryService.uploadFile(file);
-    if (('secure_url' in uploadResult)) {
-      // Save message record in database
-      const dto: MessageDto = {
-        conversationId: body.conversationId,
-        type: 'VOICE',
-        text: null,
-        duration: uploadResult.duration,
-        mediaUrl: uploadResult.secure_url,
-      };
-      return this.messageService.sendMessage(dto, senderId)
+  // @Post('messages/voice')
+  // @UseInterceptors(FileInterceptor('file', multerConfig))
+  // async uploadVoice(
+  //   @UploadedFile() file: Express.Multer.File,
+  //   @Req() req: Request & { user: { sub: string } },
+  //   @Body() body: { conversationId: string }
+  // ) {
+  //   if (!file) throw new BadRequestException('No file uploaded');
+  //   const senderId = req?.user.sub;
+  //   // const conversationId = body.conversationId;
+  //   // Upload audio file to Cloudinary
+  //   const uploadResult = await this.cloudinaryService.uploadFile(file);
+  //   if (('secure_url' in uploadResult)) {
+  //     // Save message record in database
+  //     const dto: MessageDto = {
+  //       conversationId: body.conversationId,
+  //       type: 'VOICE',
+  //       text: null,
+  //       duration: uploadResult.duration,
+  //       mediaUrl: uploadResult.secure_url,
+  //     };
+  //     return this.messageService.sendMessage(dto, senderId)
 
-    } else {
-      throw new BadRequestException('Cloudinary upload failed');
+  //   } else {
+  //     throw new BadRequestException('Cloudinary upload failed');
+  //   }
+
+  // }
+  @Post('messages/voice')
+  @UseInterceptors(
+    FileInterceptor('file', multerConfig),
+  )
+  async uploadVoice(
+    @UploadedFile()
+    file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException(
+        'No file uploaded',
+      );
     }
 
+    const uploadResult =
+      await this.cloudinaryService.uploadFile(file);
+
+    if (!('secure_url' in uploadResult)) {
+      throw new BadRequestException(
+        'Cloudinary upload failed',
+      );
+    }
+
+    return {
+      mediaUrl: uploadResult.secure_url,
+      duration: uploadResult.duration ?? null,
+    };
   }
   @Post('messages/document')
   @UseInterceptors(FileInterceptor('file', multerConfig))

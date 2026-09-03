@@ -64,7 +64,7 @@ export class MessageService {
     };
   }
 
-  async sendMessage(dto: MessageDto, senderId?: string) {
+  async sendMessage(dto: MessageDto, senderId: string) {
     // create message with flexible type
 
 
