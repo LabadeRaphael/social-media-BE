@@ -1,191 +1,300 @@
-// src/utils/mailer.ts
-import * as nodemailer from 'nodemailer';
+import { BrevoClient } from '@getbrevo/brevo';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,   // e.g. "smtp.gmail.com"
-  port: Number(process.env.SMTP_PORT),
-  secure: true, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+const apiKey = process.env.BREVO_API_KEY;
+const senderEmail = process.env.BREVO_SENDER_EMAIL;
+const senderName = process.env.BREVO_SENDER_NAME || 'Nestfinity Team';
+
+if (!apiKey) {
+  throw new Error('BREVO_API_KEY is not configured');
+}
+
+if (!senderEmail) {
+  throw new Error('BREVO_SENDER_EMAIL is not configured');
+}
+
+const brevo = new BrevoClient({
+  apiKey,
+  timeoutInSeconds: 30,
+  maxRetries: 2,
 });
+
+const sendEmail = (
+  to: string,
+  subject: string,
+  html: string,
+) => {
+  return brevo.transactionalEmails.sendTransacEmail({
+    sender: {
+      name: senderName,
+      email: senderEmail,
+    },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+  });
+};
+
+// Shared layout for consistent spacing and mobile-friendly email rendering.
+const emailLayout = (content: string) => `
+
+<div style="padding:20px 24px;background-color:#120802;border-bottom:1px solid #382f25;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="vertical-align:middle;padding-right:12px;">
+        <img
+          src="https://res.cloudinary.com/dvnc009fc/image/upload/fl_preserve_transparency/v1791584303/file-Nz8Ma4h5Djtg55mcPnQh7b.jpg"
+          alt="Nestfinity logo"
+          width="44"
+          height="44"
+          style="display:block;width:44px;height:44px;object-fit:cover;border-radius:50%;border:0;"
+        />
+      </td>
+      <td style="vertical-align:middle;">
+        <p style="margin:0;color:#ffc244;font-size:22px;font-weight:bold;letter-spacing:0.3px;">
+          Nestfinity
+        </p>
+      </td>
+    </tr>
+  </table>
+</div>
+
+
+      <div style="padding: 28px 24px;background-color:#120802">
+        ${content}
+      </div>
+
+      <div style="
+        padding: 18px 24px;
+        background-color: #151515;
+        border-top: 1px solid #382f25;
+      ">
+        <p style="
+          margin: 0;
+          color: #aaa39c;
+          font-size: 12px;
+          line-height: 1.6;
+        ">
+          This is an automated security email from Nestfinity.
+          Please do not reply directly to this message.
+        </p>
+      </div>
+    </div>
+  </div>
+`;
+
+const emailHeading = (text: string) => `
+  <h2 style="
+    margin: 0 0 16px;
+    color: #ffc244;
+    font-size: 22px;
+    line-height: 1.35;
+  ">
+    ${text}
+  </h2>
+`;
+
+const emailParagraph = (text: string) => `
+  <p style="
+    margin: 0 0 16px;
+    color: #fdf8f4;
+    font-size: 14px;
+    line-height: 1.8;
+  ">
+    ${text}
+  </p>
+`;
+
+const emailButton = (url: string, label: string) => `
+  <div style="margin: 24px 0;">
+    <a href="${url}" style="
+      display: inline-block;
+      background-color: #ffc244;
+      color: #1a1a1a;
+      padding: 12px 22px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1.5;
+    ">
+      ${label}
+    </a>
+  </div>
+`;
 
 const sendResetPasswordEmail = (to: string, token: string) => {
   const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password?token=${token}`;
 
-  const mailOptions = {
-    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
-    to,
-    subject: 'Password Reset Request',
-    html: `
-      <div style="background-color: #1a1a1a; padding: 20px; font-family: Arial, sans-serif; color: #fdf8f4;">
-        <h2 style="color: #ffc244; margin-bottom: 12px;">Password Reset Request</h2>
-        <p style="color: #fdf8f4;">You requested to reset your password.</p>
-        <p style="color: #fdf8f4;">Click the button below to reset it:</p>
-        <a href="${resetUrl}" style="
-          display: inline-block;
-          background-color: #ffc244;
-          color: #1a1a1a;
-          padding: 10px 20px;
-          text-decoration: none;
-          border-radius: 5px;
-          font-weight: bold;
-        ">
-          Reset Password
-        </a>
-        <p style="margin-top: 20px; color: #fdf8f4;">This link will expire in 15 minutes.</p>
-      </div>
-    `,
-  };
+  const html = emailLayout(`
+    ${emailHeading('Password Reset Request')}
 
-  return transporter.sendMail(mailOptions);
+    ${emailParagraph(
+      'You requested to reset your password.',
+    )}
+
+    ${emailParagraph(
+      'Click the button below to choose a new password:',
+    )}
+
+    ${emailButton(resetUrl, 'Reset Password')}
+
+    ${emailParagraph(
+      'For your security, this link will expire in 15 minutes.',
+    )}
+
+    <p style="
+      margin: 20px 0 0;
+      color: #aaa39c;
+      font-size: 12px;
+      line-height: 1.7;
+    ">
+      If you did not request a password reset, you can ignore this email.
+      Your password will not change unless the reset process is completed.
+    </p>
+  `);
+
+  return sendEmail(to, 'Password Reset Request', html);
 };
+
 const sendRecoverAccountEmail = (to: string, token: string) => {
-  // const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account?token=${token}`;
-const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
-  const mailOptions = {
-    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
-    to,
-    subject: "Recover Your Nestfinity Account",
-    html: `
-      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
-        
-        <h2 style="color: #ffc244; margin-bottom: 12px;">
-          Account Recovery Request
-        </h2>
+  const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
 
-        <p style="color: #fdf8f4; font-size: 14px;">
-          We received a request to restore your Nestfinity account.
-        </p>
+  const html = emailLayout(`
+    ${emailHeading('Account Recovery Request')}
 
-        <p style="color: #fdf8f4; font-size: 14px;">
-          If this was you, click the button below to recover your account:
-        </p>
+    ${emailParagraph(
+      'We received a request to restore your Nestfinity account.',
+    )}
 
-        <a href="${recoverUrl}" style="
-          display: inline-block;
-          background-color: #ffc244;
-          color: #1a1a1a;
-          padding: 12px 22px;
-          text-decoration: none;
-          border-radius: 6px;
-          font-weight: bold;
-          margin-top: 10px;
-        ">
-          Recover Account
-        </a>
+    ${emailParagraph(
+      'If you initiated this request, use the button below to continue recovering your account:',
+    )}
 
-        <p style="margin-top: 20px; font-size: 13px; color: #cccccc;">
-          This link will expire in 15 minutes for your security.
-        </p>
+    ${emailButton(recoverUrl, 'Recover Account')}
 
-        <p style="font-size: 12px; color: #888;">
-          If you did not request this, you can safely ignore this email.
-        </p>
-      </div>
-    `,
-  };
+    ${emailParagraph(
+      'For your security, this link will expire in 15 minutes.',
+    )}
 
-  return transporter.sendMail(mailOptions);
+    <p style="
+      margin: 20px 0 0;
+      color: #aaa39c;
+      font-size: 12px;
+      line-height: 1.7;
+    ">
+      If you did not request account recovery, you can safely ignore this email.
+    </p>
+  `);
+
+  return sendEmail(to, 'Recover Your Nestfinity Account', html);
 };
 
 const sendWarningRecoverAccount = (to: string, token: string) => {
   const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
 
-  const mailOptions = {
-    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
+  const html = emailLayout(`
+    ${emailHeading('⚠️ Final Warning')}
+
+    <div style="
+      margin: 0 0 18px;
+      padding: 14px 16px;
+      background-color: #2b2115;
+      border-left: 3px solid #ffc244;
+      border-radius: 4px;
+    ">
+      <p style="
+        margin: 0;
+        color: #ffc244;
+        font-size: 15px;
+        font-weight: bold;
+        line-height: 1.6;
+      ">
+        Your Nestfinity account is scheduled for permanent deletion in 24 hours.
+      </p>
+    </div>
+
+    ${emailParagraph(
+      'If you still want to keep your account, use the button below to restore it.',
+    )}
+
+    ${emailParagraph(
+      'If the account is permanently deleted, its data may no longer be recoverable.',
+    )}
+
+    ${emailButton(recoverUrl, 'Restore My Account')}
+
+    <p style="
+      margin: 20px 0 0;
+      color: #aaa39c;
+      font-size: 12px;
+      line-height: 1.7;
+    ">
+      This is your final reminder before the scheduled deletion.
+      Please restore your account before the deadline if you want to keep it.
+    </p>
+  `);
+
+  return sendEmail(
     to,
-    subject: "⚠️ Final Warning: Account Deletion in 24 Hours",
-    html: `
-      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
-        
-        <h2 style="color: #ffc244; margin-bottom: 12px;">
-          ⚠️ Final Warning
-        </h2>
-
-        <p style="color: #fdf8f4; font-size: 14px;">
-          Your Nestfinity account will be permanently deleted in <b>24 hours</b>.
-        </p>
-
-        <p style="color: #fdf8f4; font-size: 14px;">
-          If this was a mistake or you still want to keep your account, you can restore it now.
-        </p>
-
-        <p style="color: #fdf8f4; font-size: 14px;">
-          Once deleted, all your data will be permanently removed and cannot be recovered.
-        </p>
-
-        <a href="${recoverUrl}" style="
-          display: inline-block;
-          background-color: #ffc244;
-          color: #1a1a1a;
-          padding: 12px 22px;
-          text-decoration: none;
-          border-radius: 6px;
-          font-weight: bold;
-          margin-top: 12px;
-        ">
-          Restore My Account
-        </a>
-
-        <p style="margin-top: 20px; font-size: 12px; color: #888;">
-          This is your final reminder before permanent deletion.
-        </p>
-      </div>
-    `,
-  };
-
-  return transporter.sendMail(mailOptions);
+    '⚠️ Final Warning: Account Deletion in 24 Hours',
+    html,
+  );
 };
+
 const sendEmailChangeVerification = (to: string, token: string) => {
   const verifyUrl = `${process.env.FRONTEND_URL}/auth/verify-email-change?token=${token}`;
 
-  const mailOptions = {
-    from: `"Nestfinity Team" <${process.env.SMTP_USER}>`,
-    to,
-    subject: "🔐 Confirm Your Email Change",
+  const html = emailLayout(`
+    ${emailHeading('🔐 Email Change Request')}
 
-    html: `
-      <div style="background-color: #1a1a1a; padding: 24px; font-family: Arial, sans-serif; color: #fdf8f4; border-radius: 8px;">
-        
-        <h2 style="color: #ffc244; margin-bottom: 12px;">
-          🔐 Email Change Request
-        </h2>
+    ${emailParagraph(
+      'We received a request to change the email address associated with your Nestfinity account.',
+    )}
 
-        <p style="color: #fdf8f4; font-size: 14px;">
-          We received a request to change your email address on your Nestfinity account.
-        </p>
+    ${emailParagraph(
+      'If you initiated this request, confirm the change using the button below.',
+    )}
 
-        <p style="color: #fdf8f4; font-size: 14px;">
-          If this was you, please confirm this change by clicking the button below.
-        </p>
+    ${emailButton(verifyUrl, 'Confirm Email Change')}
 
-        <p style="color: #fdf8f4; font-size: 14px;">
-          If you did NOT request this, you can safely ignore this email — your account remains secure.
-        </p>
+    ${emailParagraph(
+      'For your security, this verification link is time-limited. Please use it promptly.',
+    )}
 
-        <a href="${verifyUrl}" style="
-          display: inline-block;
-          background-color: #ffc244;
-          color: #1a1a1a;
-          padding: 12px 22px;
-          text-decoration: none;
-          border-radius: 6px;
-          font-weight: bold;
-          margin-top: 12px;
-        ">
-          Confirm Email Change
-        </a>
+    <div style="
+      margin-top: 24px;
+      padding: 16px;
+      background-color: #25211b;
+      border-radius: 6px;
+    ">
+      <p style="
+        margin: 0 0 8px;
+        color: #ffc244;
+        font-size: 14px;
+        font-weight: bold;
+      ">
+        Wasn't this you?
+      </p>
 
-        <p style="margin-top: 20px; font-size: 12px; color: #888;">
-          This link will expire soon for your security.
-        </p>
-      </div>
-    `,
-  };
+      <p style="
+        margin: 0;
+        color: #fdf8f4;
+        font-size: 13px;
+        line-height: 1.8;
+      ">
+        If you did not request this change, do not click the confirmation button.
+        If you suspect someone has accessed your account, contact Nestfinity
+        support through the app's official support channel.
+      </p>
+    </div>
+  `);
 
-  return transporter.sendMail(mailOptions);
+  return sendEmail(to, '🔐 Confirm Your Email Change', html);
 };
 
-export { sendResetPasswordEmail, sendRecoverAccountEmail, sendWarningRecoverAccount, sendEmailChangeVerification};
+export {
+  sendResetPasswordEmail,
+  sendRecoverAccountEmail,
+  sendWarningRecoverAccount,
+  sendEmailChangeVerification,
+};

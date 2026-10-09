@@ -25,8 +25,8 @@ export class AuthHelper {
       }
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-      // const deletedAt = new Date(Date.now() - 29 * MS_PER_DAY);
-      const deletedAt = new Date(freshUser.deletedAt);
+      const deletedAt = new Date(Date.now() - 29 * MS_PER_DAY);
+      // const deletedAt = new Date(freshUser.deletedAt);
       const diffInMs = now.getTime() - deletedAt.getTime();
       const diffInDays = Math.floor(diffInMs / MS_PER_DAY);
 

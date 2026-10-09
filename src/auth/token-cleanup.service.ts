@@ -26,7 +26,7 @@ export class TokenCleanupService {
     }
   }
   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
-  @Cron(CronExpression.EVERY_DAY_AT_10AM)
+  @Cron('35 17 * * *')
   async handleDeletedAccounts() {
     const users = await this.prisma.user.findMany({
       where: {
@@ -47,8 +47,10 @@ export class TokenCleanupService {
     const now = Date.now();
 
     for (const user of users) {
-      const deletedAt = new Date(user.deletedAt!);
-
+      // const deletedAt = new Date(user.deletedAt!);
+      const deletedAt = new Date(
+        Date.now() - 29 * 24 * 60 * 60 * 1000
+      );
       const diffInMs = now - deletedAt.getTime();
       const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 

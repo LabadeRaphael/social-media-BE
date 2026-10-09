@@ -18,5 +18,10 @@ export const envValidator = Joi.object({
   JWT_RESETPSW_EXPIRATION: Joi.string().default('15m'),
   JWT_CHANGE_EMAIL_EXPIRATION: Joi.string().default('15m'),
   JWT_TOKEN_AUDIENCE:Joi.string().default('Nestfinity'),
-  JWT_TOKEN_ISSUER:Joi.string().default('Nestfinity')
+  JWT_TOKEN_ISSUER:Joi.string().default('Nestfinity'),
+  
+  //BREVO
+  BREVO_API_KEY:Joi.string().min(32).required(), 
+  BREVO_SENDER_EMAIL:Joi.string().required(),
+  BREVO_SENDER_NAME:Joi.string().default('Nestfinity'),
 });
