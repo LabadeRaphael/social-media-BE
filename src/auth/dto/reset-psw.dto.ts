@@ -5,15 +5,15 @@ export class ResetPasswordDto {
 
   @IsNotEmpty()
   @IsString()
-  token: string;
+  token!: string;
   
   @IsNotEmpty()
   @IsString()
   @MinLength(6, { message: 'Password must be at least 6 characters' })
-  newPassword: string;
+  newPassword!: string;
   
   @IsNotEmpty()
   @IsString()
   @MinLength(6, { message: 'Confirm Password must be at least 6 characters' })
-  confirmPassword: string;
+  confirmPassword!: string;
 }

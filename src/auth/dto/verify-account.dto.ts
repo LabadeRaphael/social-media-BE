@@ -5,5 +5,5 @@ export class VerifyActDto {
 
   @IsNotEmpty()
   @IsString()
-  token: string;
+  token!: string;
 }

@@ -23,5 +23,5 @@ export class UpdateUserDto {
   @IsNotEmpty()
   @MinLength(6, { message: 'rePassword must be at least 6 characters' })
   @Transform(({ value }) => String(value)?.trim())
-  re_auth_psw: string;
+  re_auth_psw!: string;
 }

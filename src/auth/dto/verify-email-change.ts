@@ -5,5 +5,5 @@ export class VerifyEmailChangeDto {
 
   @IsNotEmpty()
   @IsString()
-  token: string;
+  token!: string;
 }

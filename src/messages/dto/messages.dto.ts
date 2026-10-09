@@ -4,7 +4,7 @@ import { MessageType } from '@prisma/client';
 export class MessageDto {
   @IsNotEmpty()
   @IsString()
-  conversationId: string;
+  conversationId!: string;
 
   
   @IsOptional()
@@ -13,7 +13,7 @@ export class MessageDto {
 
   @IsNotEmpty()
   @IsEnum(MessageType)
-  type: MessageType;
+  type!: MessageType;
   
   // for voice 
   @IsOptional()

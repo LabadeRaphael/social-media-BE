@@ -5,7 +5,7 @@ export class RegisterDto {
   @IsString({ message: 'Email must be a string value.' })
   @Transform(({ value }) => String(value).trim().toLowerCase())
   @IsEmail({}, { message: 'Email must be valid.' })
-  email: string;
+  email!: string;
 
   @IsString({ message: 'Username must be a string value.' })
   @IsNotEmpty({ message: 'Username must not be empty.' })
@@ -15,11 +15,11 @@ export class RegisterDto {
   @Matches(/^[A-Za-z0-9_]+$/, {
     message: 'Username can contain only letters, numbers, and underscores.',
   })
-  userName: string;
+  userName!: string;
 
   @IsString({ message: 'Password must be a string value.' })
   @IsNotEmpty({ message: 'Password must not be a empty.' })
   @MinLength(6, { message: 'Password must be at least 6 characters' })
   @Transform(({ value }) => String(value).trim())
-  password: string;
+  password!: string;
 }

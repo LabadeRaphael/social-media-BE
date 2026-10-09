@@ -3,9 +3,9 @@ import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 export class RequestEmailChangeDto {
   @IsEmail()
-  newEmail: string;
+  newEmail!: string;
   
   @IsNotEmpty()
   @IsString()
-  emailAuthPassword:string
+  emailAuthPassword!:string
 }
