@@ -24,7 +24,7 @@ model User {
   avatarUrl           String?
   failedAuthAttempts  Int                   @default(0)
   authLockedUntil     DateTime?
-  deletionWarningSent Boolean @default(false)
+  deletionWarningSent Boolean               @default(false)
   // profile       Profile?
   refreshTokens       RefreshToken[]
   resetTokens         PasswordResetToken[]
@@ -35,6 +35,7 @@ model User {
   blockedBy           User[]                @relation("UserBlocks")
   RecoverAccountToken RecoverAccountToken[]
   EmailChangeToken    EmailChangeToken[]
+  oauthAccounts       OAuthAccount[]
 }
 
 model RefreshToken {
@@ -116,6 +117,7 @@ model RecoverAccountToken {
 
   @@index([userId, hashedToken])
 }
+
 model EmailChangeToken {
   id          String   @id @default(uuid())
   hashedToken String   @unique
@@ -126,6 +128,20 @@ model EmailChangeToken {
   used        Boolean  @default(false)
 
   @@index([userId, hashedToken])
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  provider          String
+  providerAccountId String
+  userId            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 enum Theme {
