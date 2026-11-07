@@ -25,4 +25,30 @@ export class CookiesService {
   ): string | undefined {
     return req.cookies?.[name] as string | undefined; // assert type explicitly
   }
+
+  // Temporary cookies for Google OAuth transactions
+  setOAuthCookie(
+    res: Response,
+    name: string,
+    value: string,
+    maxAge: number,
+  ) {
+    res.cookie(name, value, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    });
+  }
+
+  clearOAuthCookie(res: Response, name: string) {
+    res.clearCookie(name, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+  }
+
 }

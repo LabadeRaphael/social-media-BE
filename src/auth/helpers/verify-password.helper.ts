@@ -59,7 +59,7 @@ export class AuthHelper {
         readableTime: timeLeft,
       });
     }
-    const isValid = await bcrypt.compare(password, freshUser.password);
+    const isValid = freshUser.password ? await bcrypt.compare(password, freshUser.password) : false;
 
     if (!isValid) {
       const latestUser = await this.prisma.user.findUnique({ where: { id: userId } });

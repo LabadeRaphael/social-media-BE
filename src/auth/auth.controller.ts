@@ -1,5 +1,7 @@
+import { GoogleOidcService } from './google/google-oidc.service';
+import * as oidc from 'openid-client';
 import authConfig from 'src/config/auth.config';
-import { Body, Controller, Get, Inject, Post, Put, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, InternalServerErrorException, Post, Put, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AllowAnonymous } from 'src/decorators/public.decorator';
@@ -24,6 +26,7 @@ export class AuthController {
     @Inject(authConfig.KEY)
     private readonly authConfiguration: ConfigType<typeof authConfig>,
     private readonly cookieService: CookiesService,
+    private readonly googleOidcService: GoogleOidcService,
   ) { }
   @AllowAnonymous()
   @Post('signup')
@@ -42,6 +45,199 @@ export class AuthController {
     this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs); // 7d
     return { message: 'Login successful', status: true };
 
+  }
+
+  @AllowAnonymous()
+  @Get('google')
+  async googleLogin(@Res() res: Response) {
+    const {
+      authorizationUrl,
+      state,
+      nonce,
+      codeVerifier,
+    } = await this.googleOidcService.createAuthorizationRequest();
+    console.log(authorizationUrl);
+
+    const maxAge = 5 * 60 * 1000;
+
+    this.cookieService.setOAuthCookie(
+      res,
+      'google_oauth_state',
+      state,
+      maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res,
+      'google_oauth_nonce',
+      nonce,
+      maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res,
+      'google_oauth_code_verifier',
+      codeVerifier,
+      maxAge,
+    );
+
+    return res.redirect(authorizationUrl.href);
+  }
+
+
+  @AllowAnonymous()
+  @Get('google/callback')
+  async googleCallback(
+    @Req() req: Request & {
+      cookies?: Record<string, string>;
+    },
+    @Res() res: Response,
+  ) {
+    // 1. Retrieve the original OAuth values from cookies.
+    const storedState = this.cookieService.getAuthCookie(
+      req,
+      'google_oauth_state',
+    );
+
+    const storedNonce = this.cookieService.getAuthCookie(
+      req,
+      'google_oauth_nonce',
+    );
+
+    const storedCodeVerifier = this.cookieService.getAuthCookie(
+      req,
+      'google_oauth_code_verifier',
+    );
+
+    try {
+      // 2. Check whether Google returned an error.
+      if (typeof req.query.error === 'string') {
+        throw new UnauthorizedException(
+          'Google sign-in was cancelled or denied',
+        );
+      }
+
+      // 3. Validate the returned state.
+      const returnedState = req.query.state;
+
+      if (
+        typeof returnedState !== 'string' ||
+        !storedState ||
+        returnedState !== storedState
+      ) {
+        throw new UnauthorizedException(
+          'Invalid Google authentication request',
+        );
+      }
+
+      // 4. Make sure the other security values exist.
+      if (!storedNonce || !storedCodeVerifier) {
+        throw new UnauthorizedException(
+          'Google authentication session has expired',
+        );
+      }
+
+      // 5. Make sure Google returned an authorization code.
+      if (typeof req.query.code !== 'string') {
+        throw new BadRequestException(
+          'Google authorization code is missing',
+        );
+      }
+
+      // 6. Confirm that the callback URL is configured.
+      const redirectUri =
+        this.authConfiguration.googleCallbackUrl;
+
+      if (!redirectUri) {
+        throw new InternalServerErrorException(
+          'Google callback URL is not configured',
+        );
+      }
+
+      // 7. Reconstruct Google's complete callback URL.
+      const callbackUrl = new URL(req.originalUrl, redirectUri);
+
+      // 8. Retrieve Google's OIDC configuration.
+      const configuration =
+        await this.googleOidcService.getConfiguration();
+
+      // 9. Exchange the authorization code for tokens.
+      const tokens = await oidc.authorizationCodeGrant(
+        configuration,
+        callbackUrl,
+        {
+          expectedState: storedState,
+          expectedNonce: storedNonce,
+          pkceCodeVerifier: storedCodeVerifier,
+        },
+      );
+
+      // 10. Extract the validated Google ID token claims.
+      const claims = tokens.claims();
+
+      const email = claims?.email;
+      const picture = claims?.picture;
+
+      if (
+        !claims?.sub ||
+        typeof email !== 'string' ||
+        claims.email_verified !== true
+      ) {
+        throw new ForbiddenException(
+          'Google account email could not be verified.',
+        );
+      }
+
+      const profilePicture =
+        typeof picture === 'string' ? picture : undefined;
+
+      // 11. Authenticate the user through Nestfinity.
+      const {
+        accessToken,
+        refreshToken,
+        accessTokenExpireAt,
+      } = await this.authService.loginWithGoogle({
+        googleId: claims.sub,
+        email,
+        emailVerified: true,
+        picture: profilePicture,
+      });
+
+      // 12. Set Nestfinity authentication cookies.
+      this.cookieService.setAuthCookie(
+        res,
+        'accessToken',
+        accessToken,
+        accessTokenExpireAt - Date.now(),
+      );
+
+      this.cookieService.setAuthCookie(
+        res,
+        'refreshToken',
+        refreshToken,
+        ms(this.authConfiguration.jwtRefreshExpiration!),
+      );
+
+    } finally {
+      // 13. Clear temporary OAuth cookies BEFORE sending the response.
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_oauth_state',
+      );
+
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_oauth_nonce',
+      );
+
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_oauth_code_verifier',
+      );
+    }
+
+    // 14. Redirect only after cookie cleanup is complete.
+    return res.redirect(`${this.authConfiguration.frontendUrl}/dashboard/chats`);
   }
 
   @AllowAnonymous()
@@ -144,13 +340,13 @@ export class AuthController {
     const userId = req?.user?.sub
     return this.authService.requestEmailChange(userId, dto);
   }
- 
+
   @AllowAnonymous()
   @Post('verify-email-change')
   async verifyEmailChange
     (@Body() token: VerifyEmailChangeDto) {
     console.log("verify-email-change");
-    
+
     return this.authService.verifyEmailChange(token);
   }
 

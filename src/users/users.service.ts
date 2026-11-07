@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
@@ -7,6 +7,7 @@ import { RegisterDto } from 'src/auth/dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { AuthHelper } from 'src/auth/helpers/verify-password.helper';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -39,6 +40,93 @@ export class UsersService {
       where: { email },
     });
     return user
+  }
+
+  async findOrCreateGoogleUser({
+    googleId,
+    email,
+    emailVerified,
+    picture,
+  }: {
+    googleId: string;
+    email: string;
+    emailVerified: boolean;
+    picture?: string;
+  }) {
+    // 1. Only accept verified Google email addresses.
+    if (!googleId || !email || emailVerified !== true) {
+      throw new ForbiddenException(
+        'Google account email must be verified.',
+      );
+    }
+
+    // 2. Check whether this Google account is already linked.
+    const existingGoogleAccount =
+      await this.prisma.oAuthAccount.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: 'google',
+            providerAccountId: googleId,
+          },
+        },
+        include: {
+          user: true,
+        },
+      });
+
+    if (existingGoogleAccount) {
+      const user = existingGoogleAccount.user;
+
+      if (user.isDeleted) {
+        throw new ForbiddenException(
+          'This account has been deleted. Please recover your account first.',
+        );
+      }
+
+      return user;
+    }
+
+    // 3. Check whether the email already belongs to another account.
+    const existingUser = await this.findByEmail(email);
+
+    if (existingUser) {
+      if (existingUser.isDeleted) {
+        throw new ForbiddenException(
+          'This account has been deleted. Please recover your account first.',
+        );
+      }
+
+      throw new ConflictException(
+        'An account with this email already exists. Sign in using your existing method before linking Google.',
+      );
+    }
+
+    // 4. Generate a unique username.
+    const baseUsername =
+      email
+        .split('@')[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '')
+        .slice(0, 20) || 'google_user';
+
+    const userName = `${baseUsername}_${randomBytes(4).toString('hex')}`;
+
+    // 5. Create the user and Google account together.
+    return this.prisma.user.create({
+      data: {
+        email,
+        userName,
+        password: null,
+        avatarUrl: picture ?? null,
+
+        oauthAccounts: {
+          create: {
+            provider: 'google',
+            providerAccountId: googleId,
+          },
+        },
+      },
+    });
   }
 
   async saveRefreshToken(userId: string, token: string, expiresAt: Date) {
@@ -92,7 +180,7 @@ export class UsersService {
   async saveEmailChangeToken(userId: string, hashedEmailChangeToken: string, expiresAt: Date) {
     return this.prisma.emailChangeToken.create({
       data: {
-       hashedToken: hashedEmailChangeToken,
+        hashedToken: hashedEmailChangeToken,
         userId,
         expiresAt
       },
@@ -407,13 +495,13 @@ export class UsersService {
     });
   }
   async updateEmail(userId: string, newEmail: string) {
-  return this.prisma.user.update({
-    where: { id: userId },
-    data: {
-      email: newEmail,
-    },
-  });
-}
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        email: newEmail,
+      },
+    });
+  }
   // async resetFailedAttempts(userId: string) {
   //   return this.prisma.user.update({
   //     where: { id: userId },

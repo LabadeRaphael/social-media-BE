@@ -56,10 +56,29 @@ export class AuthService {
       login.password
     );
 
-
     return this.generateLoginTokens(user);
 
+  }
 
+  async loginWithGoogle({
+    googleId,
+    email,
+    emailVerified,
+    picture,
+  }: {
+    googleId: string;
+    email: string;
+    emailVerified: boolean;
+    picture?: string;
+  }) {
+    const user = await this.usersService.findOrCreateGoogleUser({
+      googleId,
+      email,
+      emailVerified,
+      picture,
+    });
+
+    return this.generateLoginTokens(user);
   }
   private async signToken<T>(userId: string, expiresIn: string, secret: string, payload?: T,) {
     return this.jwtService.signAsync({
@@ -215,7 +234,7 @@ export class AuthService {
       // throw new BadRequestException("Account is active. Please use password reset instead.")
     }
     console.log("Recover requested for active account");
-      
+
     await this.generateAndSendRecoverToken(user, {
       expiresIn: '15m',
       emailType: 'recover',
@@ -239,7 +258,7 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException('Invalid token or user not found');
       }
-      const isSamePassword = await bcrypt.compare(newPassword, user.password);
+      const isSamePassword = user.password ? await bcrypt.compare(newPassword, user.password) : false;
       if (isSamePassword) {
         throw new BadRequestException('New password cannot be the same as the old one');
       }

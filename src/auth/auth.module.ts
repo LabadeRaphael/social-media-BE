@@ -9,6 +9,7 @@ import { JwtModule, JwtModuleAsyncOptions } from '@nestjs/jwt';
 import { CookiesService } from './cookies.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { AuthHelper } from './helpers/verify-password.helper';
+import { GoogleOidcService } from './google/google-oidc.service';
 const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [ConfigModule.forFeature(authConfig)],
   inject: [authConfig.KEY],
@@ -28,7 +29,7 @@ const jwtProvider = (): JwtModuleAsyncOptions => ({
     PrismaModule
   ],
   controllers: [AuthController],
-  providers: [AuthService, CookiesService,AuthHelper],
+  providers: [AuthService, CookiesService,AuthHelper,GoogleOidcService],
   exports: [AuthService, JwtModule]
 })
 export class AuthModule {}
