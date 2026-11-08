@@ -51,7 +51,9 @@ export class GoogleOidcService {
   }
 
 
-  async createAuthorizationRequest() {
+  async createAuthorizationRequest(
+    intent: 'login' | 'delete-account' = 'login',
+  ) {
     const configuration = await this.getConfiguration();
 
     // Generate unique security values for this login attempt.
@@ -81,6 +83,7 @@ export class GoogleOidcService {
       state,
       nonce,
       codeVerifier,
+      intent,
     };
   }
 

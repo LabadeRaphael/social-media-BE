@@ -1,7 +1,7 @@
 import { GoogleOidcService } from './google/google-oidc.service';
 import * as oidc from 'openid-client';
 import authConfig from 'src/config/auth.config';
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, InternalServerErrorException, Post, Put, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, InternalServerErrorException, Post, Put, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AllowAnonymous } from 'src/decorators/public.decorator';
@@ -11,8 +11,8 @@ import { ResetPasswordDto } from './dto/reset-psw.dto';
 import { CookiesService } from './cookies.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigType} from '@nestjs/config';
-import { ConflictException} from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import { ConflictException } from '@nestjs/common';
 import * as ms from 'ms';
 import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
@@ -48,43 +48,130 @@ export class AuthController {
 
   }
 
+  // @AllowAnonymous()
+  // @Get('google')
+  // async googleLogin(
+  //   @Res({ passthrough: true }) res: Response,
+  //   @Query('intent') intent?: string,
+  // ) {
+
+  //   const allowedIntents = ['login', 'delete-account'];
+
+  //   if (intent && !allowedIntents.includes(intent)) {
+  //     throw new BadRequestException('Invalid Google authorization intent.');
+  //   }
+
+  //   const authorizationIntent = intent ?? 'login';
+
+  //   const {
+  //     authorizationUrl,
+  //     state,
+  //     nonce,
+  //     codeVerifier,
+  //     intent: storedIntent,
+  //   } = await this.googleOidcService.createAuthorizationRequest(authorizationIntent as 'login' | 'delete-account',);
+  //   console.log(authorizationUrl);
+
+  //   const maxAge = 5 * 60 * 1000;
+
+  //   this.cookieService.setOAuthCookie(
+  //     res,
+  //     'google_oauth_state',
+  //     state,
+  //     maxAge,
+  //   );
+
+  //   this.cookieService.setOAuthCookie(
+  //     res,
+  //     'google_oauth_nonce',
+  //     nonce,
+  //     maxAge,
+  //   );
+
+  //   this.cookieService.setOAuthCookie(
+  //     res,
+  //     'google_oauth_code_verifier',
+  //     codeVerifier,
+  //     maxAge,
+  //   );
+
+  //   res.cookie('google_oauth_intent', storedIntent, cookieOptions);
+
+  //   return res.redirect(authorizationUrl.href);
+  // }
   @AllowAnonymous()
   @Get('google')
-  async googleLogin(@Res() res: Response) {
+  async googleLogin(
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const {
       authorizationUrl,
       state,
       nonce,
       codeVerifier,
-    } = await this.googleOidcService.createAuthorizationRequest();
-    console.log(authorizationUrl);
+      intent,
+    } = await this.googleOidcService.createAuthorizationRequest('login');
 
     const maxAge = 5 * 60 * 1000;
 
     this.cookieService.setOAuthCookie(
-      res,
-      'google_oauth_state',
-      state,
-      maxAge,
+      res, 'google_oauth_state', state, maxAge,
     );
 
     this.cookieService.setOAuthCookie(
-      res,
-      'google_oauth_nonce',
-      nonce,
-      maxAge,
+      res, 'google_oauth_nonce', nonce, maxAge,
     );
 
     this.cookieService.setOAuthCookie(
-      res,
-      'google_oauth_code_verifier',
-      codeVerifier,
-      maxAge,
+      res, 'google_oauth_code_verifier', codeVerifier, maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_intent', intent, maxAge,
     );
 
     return res.redirect(authorizationUrl.href);
   }
 
+  @Get('google/reauthenticate')
+  async googleReauthenticate(
+    @Req() req: Request & { user: { sub: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const {
+      authorizationUrl,
+      state,
+      nonce,
+      codeVerifier,
+      intent,
+    } = await this.googleOidcService.createAuthorizationRequest(
+      'delete-account',
+    );
+
+    const maxAge = 5 * 60 * 1000;
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_state', state, maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_nonce', nonce, maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_code_verifier', codeVerifier, maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_intent', intent, maxAge,
+    );
+
+    this.cookieService.setOAuthCookie(
+      res, 'google_oauth_user_id', req.user.sub, maxAge,
+    );
+
+    return res.redirect(authorizationUrl.href);
+  }
 
   @AllowAnonymous()
   @Get('google/callback')
@@ -109,7 +196,15 @@ export class AuthController {
       req,
       'google_oauth_code_verifier',
     );
-
+    const intent = this.cookieService.getAuthCookie(
+      req,
+      'google_oauth_intent',
+    );
+    const oauthUserId = this.cookieService.getAuthCookie(
+      req,
+      'google_oauth_user_id',
+    );
+    let redirectUrl = `${this.authConfiguration.frontendUrl}/dashboard/chats`;
     try {
       // 2. Check whether Google returned an error.
       if (typeof req.query.error === 'string') {
@@ -117,7 +212,11 @@ export class AuthController {
           'Google sign-in was cancelled or denied',
         );
       }
-
+      if (intent !== 'login' && intent !== 'delete-account') {
+        throw new UnauthorizedException(
+          'Invalid Google authentication session.',
+        );
+      }
       // 3. Validate the returned state.
       const returnedState = req.query.state;
 
@@ -192,79 +291,162 @@ export class AuthController {
       const profilePicture =
         typeof picture === 'string' ? picture : undefined;
 
-      // 11. Authenticate the user through Nestfinity.
-      const {
-        accessToken,
-        refreshToken,
-        accessTokenExpireAt,
-      } = await this.authService.loginWithGoogle({
-        googleId: claims.sub,
-        email,
-        emailVerified: true,
-        picture: profilePicture,
-      });
+      // // 11. Authenticate the user through Nestfinity.
+      // const {
+      //   accessToken,
+      //   refreshToken,
+      //   accessTokenExpireAt,
+      // } = await this.authService.loginWithGoogle({
+      //   googleId: claims.sub,
+      //   email,
+      //   emailVerified: true,
+      //   picture: profilePicture,
+      // });
 
-      // 12. Set Nestfinity authentication cookies.
-      this.cookieService.setAuthCookie(
-        res,
-        'accessToken',
-        accessToken,
-        accessTokenExpireAt - Date.now(),
-      );
+      // 11. Handle the requested Google authentication intent.
+      if (intent === 'delete-account') {
+        if (!oauthUserId) {
+          throw new UnauthorizedException(
+            'Google authentication session has expired.',
+          );
+        }
 
-      this.cookieService.setAuthCookie(
-        res,
-        'refreshToken',
-        refreshToken,
-        ms(this.authConfiguration.jwtRefreshExpiration!),
-      );
+        // Retrieve the existing Nestfinity access token.
+        const accessToken = this.cookieService.getAuthCookie(
+          req,
+          'accessToken',
+        );
+
+        if (!accessToken) {
+          throw new UnauthorizedException(
+            'Your Nestfinity session has expired. Please sign in again.',
+          );
+        }
+
+        // Verify the existing Nestfinity session.
+        const payload = await this.jwtService.verifyAsync<{ sub: string }>(
+          accessToken,
+          {
+            secret: this.authConfiguration.jwtAccessSecret,
+            audience: this.authConfiguration.jwtAudience,
+            issuer: this.authConfiguration.jwtIssuer,
+          },
+        );
+
+        // Ensure this is the same user who initiated reauthentication.
+        if (payload.sub !== oauthUserId) {
+          throw new ForbiddenException(
+            'Your account verification session does not match.',
+          );
+        }
+
+        // Google identity-to-account verification comes next.
+        const isGoogleAccountLinked =
+          await this.authService.isGoogleAccountLinked(
+            oauthUserId,
+            claims.sub,
+          );
+
+        if (!isGoogleAccountLinked) {
+          throw new ForbiddenException(
+            'This Google account is not linked to your Nestfinity account.',
+          );
+        }
+        await this.authService.softDeleteUserWithGoogle(
+          oauthUserId,
+          claims.sub,
+        );
+
+        // Clear the user's Nestfinity authentication cookies.
+        this.cookieService.clearCookie(res, 'accessToken');
+        this.cookieService.clearCookie(res, 'refreshToken');
+        redirectUrl = new URL(
+          'auth/login?success=account_deleted',
+          this.authConfiguration.frontendUrl,
+        ).toString();
+
+
+      } else {
+        // Normal Google login.
+        const {
+          accessToken,
+          refreshToken,
+          accessTokenExpireAt,
+        } = await this.authService.loginWithGoogle({
+          googleId: claims.sub,
+          email,
+          emailVerified: true,
+          picture: profilePicture,
+        });
+
+        // 12. Set Nestfinity authentication cookies.
+        this.cookieService.setAuthCookie(
+          res,
+          'accessToken',
+          accessToken,
+          accessTokenExpireAt - Date.now(),
+        );
+
+        this.cookieService.setAuthCookie(
+          res,
+          'refreshToken',
+          refreshToken,
+          ms(this.authConfiguration.jwtRefreshExpiration!),
+        );
+      }
 
     } catch (error) {
-  let errorCode = 'google_auth_failed';
+        console.error('Google OAuth callback failed:', error);
+      let errorCode = 'google_auth_failed';
+      // User cancelled or denied Google authorization.
+      if (typeof req.query.error === 'string') {
+        errorCode =
+          req.query.error === 'access_denied'
+            ? 'google_access_denied'
+            : 'google_auth_failed';
+      }
 
-  // User cancelled or denied Google authorization.
-  if (typeof req.query.error === 'string') {
-    errorCode =
-      req.query.error === 'access_denied'
-        ? 'google_access_denied'
-        : 'google_auth_failed';
-  }
+      // OAuth state or session validation failed.
+      else if (error instanceof UnauthorizedException) {
+        errorCode = 'google_session_invalid';
+      }
 
-  // OAuth state or session validation failed.
-  else if (error instanceof UnauthorizedException) {
-    errorCode = 'google_session_invalid';
-  }
+      // Existing Nestfinity account.
+      else if (error instanceof ConflictException) {
+        errorCode = 'google_account_exists';
+      }
 
-  // Existing Nestfinity account.
-  else if (error instanceof ConflictException) {
-    errorCode = 'google_account_exists';
-  }
+      // Account or email verification restrictions.
+      else if (error instanceof ForbiddenException) {
+        const response = error.getResponse();
 
-  // Account or email verification restrictions.
-  else if (error instanceof ForbiddenException) {
-    const response = error.getResponse();
+        const code =
+          typeof response === 'object' && response !== null
+            ? (response as { code?: string }).code
+            : undefined;
 
-    const code =
-      typeof response === 'object' && response !== null
-        ? (response as { code?: string }).code
-        : undefined;
+        if (code === 'GOOGLE_ACCOUNT_DELETED') {
+          errorCode = 'google_account_deleted';
+        } else if (code === 'GOOGLE_EMAIL_UNVERIFIED') {
+          errorCode = 'google_email_unverified';
+        } else if (intent === 'delete-account') {
+          errorCode = 'google_delete_verification_failed';
+        }
+      }
 
-    if (code === 'GOOGLE_ACCOUNT_DELETED') {
-      errorCode = 'google_account_deleted';
-    } else if (code === 'GOOGLE_EMAIL_UNVERIFIED') {
-      errorCode = 'google_email_unverified';
+      const destination =
+        intent === 'delete-account'
+          ? 'dashboard/settings'
+          : 'auth/login';
+
+      const errorUrl = new URL(
+        destination,
+        this.authConfiguration.frontendUrl,
+      );
+
+      errorUrl.searchParams.set('error', errorCode);
+      redirectUrl = errorUrl.toString();
     }
-  }
-
-  const loginUrl = new URL(
-    'auth/login',
-    this.authConfiguration.frontendUrl,
-  );
-
-  loginUrl.searchParams.set('error', errorCode);
-
-  return res.redirect(loginUrl.toString());
-}
     finally {
       // 13. Clear temporary OAuth cookies BEFORE sending the response.
       this.cookieService.clearOAuthCookie(
@@ -281,11 +463,22 @@ export class AuthController {
         res,
         'google_oauth_code_verifier',
       );
-    }
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_oauth_intent',
+      );
 
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_oauth_user_id',
+      );
+    }
+    return res.redirect(redirectUrl);
     // 14. Redirect only after cookie cleanup is complete.
-    return res.redirect(`${this.authConfiguration.frontendUrl}/dashboard/chats`);
+    // return res.redirect(`${this.authConfiguration.frontendUrl}/dashboard/chats`);
   }
+
+
 
   @AllowAnonymous()
   @Post('forgot-password')

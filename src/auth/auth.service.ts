@@ -16,6 +16,7 @@ import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
 import { VerifyEmailChangeDto } from './dto/verify-email-change';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
+import * as ms from 'ms';
 type SafeUser = {
   id: string;
   email: string;
@@ -30,10 +31,16 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly authHelper: AuthHelper
   ) { }
-  private parseExpiry(exp: string) {
-    if (exp === '15m') return 15 * 60 * 1000;
-    if (exp === '24h') return 24 * 60 * 60 * 1000;
-    return 15 * 60 * 1000; // fallback
+  private getExpiryDate(expiresIn: string): Date {
+    const duration = ms(expiresIn as ms.StringValue);
+
+    if (typeof duration !== 'number' || !Number.isFinite(duration)) {
+      throw new InternalServerErrorException(
+        `Invalid token expiration duration: ${expiresIn}`,
+      );
+    }
+
+    return new Date(Date.now() + duration);
   }
 
   async register(user: RegisterDto) {
@@ -42,23 +49,38 @@ export class AuthService {
 
 
   }
-  async login(login: LoginDto) {
-    // console.log(this.authConfiguration);
-    const user = await this.usersService.login(login);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+  // async login(login: LoginDto) {
+  //   // console.log(this.authConfiguration);
+  //   const user = await this.usersService.login(login);
+  //   if (!user) {
+  //     throw new UnauthorizedException('Invalid credentials');
 
+  //   }
+
+  //   // await this.authHelper.verifyPasswordOrThrow(user.id, login.password)
+  //   await this.authHelper.verifyPasswordOrThrow(
+  //     user.id,
+  //     login.password
+  //   );
+
+  //   return this.generateLoginTokens(user);
+
+  // }
+  async login(login: LoginDto) {
+    const user = await this.usersService.login(login);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
-    // await this.authHelper.verifyPasswordOrThrow(user.id, login.password)
-    await this.authHelper.verifyPasswordOrThrow(
+    const verifiedUser = await this.authHelper.verifyPasswordOrThrow(
       user.id,
-      login.password
+      login.password,
     );
 
-    return this.generateLoginTokens(user);
-
+    return this.generateLoginTokens(verifiedUser);
   }
+
 
   async loginWithGoogle({
     googleId,
@@ -97,7 +119,10 @@ export class AuthService {
     const refreshToken = await this.signToken(user.id, this.authConfiguration.jwtRefreshExpiration!, this.authConfiguration.jwtRefreshSecret!)
 
     // Compute expiresAt
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    // const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = this.getExpiryDate(
+      this.authConfiguration.jwtRefreshExpiration!,
+    );
     console.log(user.id, refreshToken, expiresAt);
     await this.usersService.saveRefreshToken(user.id, refreshToken, expiresAt);
     // console.log("Saved refresh token:", savedToken);
@@ -170,8 +195,7 @@ export class AuthService {
       }
     );
 
-    const expiresAt = new Date(Date.now() + this.parseExpiry(expiresIn));
-
+    const expiresAt = this.getExpiryDate(expiresIn);
     const hashedToken = await bcrypt.hash(recoverToken, 10);
     await this.usersService.saveRecoverActToken(user.id, hashedToken, expiresAt)
     // await this.prisma.recoverToken.upsert({
@@ -210,86 +234,305 @@ export class AuthService {
       return;
     }
 
+    // Prevent password reset on deleted accounts.
+    if (user.isDeleted) {
+      console.log(`Password reset requested for deleted account: ${email}`);
+      return;
+    }
+
     const resetPswToken = await this.generateResetToken(user)
-    console.log("resetPswToken", resetPswToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    // console.log("resetPswToken", resetPswToken);
+    // const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    const expiresAt = this.getExpiryDate(
+      this.authConfiguration.jwtResetPswExpiration!,
+    );
     const hashedPswToken = await bcrypt.hash(resetPswToken, 10);
     await this.usersService.saveResetPswToken(user?.id, hashedPswToken, expiresAt)
     // Send email with nodemailer util
     await sendResetPasswordEmail(user.email, resetPswToken);
 
   }
+
   async recoverAccount(recoverAct: RecoverDto) {
-    const { email } = recoverAct
-    console.log("email", email);
+    const { email } = recoverAct;
+
+    const genericResponse = {
+      status: true,
+      message: 'If an eligible account exists, recovery instructions will be sent.',
+    };
 
     const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new NotFoundException("User no found")
+
+    if (!user || !user.isDeleted || !user.deletedAt) {
+      return genericResponse;
     }
-    if (!user.isDeleted) {
-      const resetPswToken = await this.generateResetToken(user)
-      await sendResetPasswordEmail(user.email, resetPswToken);
-      console.log(`Recover requested for active account: ${recoverAct.email}`);
-      // throw new BadRequestException("Account is active. Please use password reset instead.")
+
+    // Check the 30-day recovery deadline.
+    const recoveryDeadline = new Date(
+      user.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+
+    if (recoveryDeadline <= new Date()) {
+      return genericResponse;
     }
-    console.log("Recover requested for active account");
 
     await this.generateAndSendRecoverToken(user, {
-      expiresIn: '15m',
+      expiresIn: this.authConfiguration.jwtRecoverAccountExpiration!,
       emailType: 'recover',
-    })
+    });
+
+    return genericResponse;
   }
 
-  async resetPassword(resetPsw: ResetPasswordDto) {
+  // async resetPassword(resetPsw: ResetPasswordDto) {
 
-    const { newPassword, confirmPassword } = resetPsw
+  //   const { newPassword, confirmPassword } = resetPsw
+  //   if (newPassword !== confirmPassword) {
+  //     throw new BadRequestException('Passwords do not match');
+  //   }
+  //   try {
+  //     const payload = await this.jwtService.verifyAsync(resetPsw.token, {
+  //       secret: this.authConfiguration.jwtResetPswSecret,
+  //       audience: this.authConfiguration.jwtAudience,
+  //       issuer: this.authConfiguration.jwtIssuer
+  //     });
+  //     const userId = payload.sub;
+  //     const user = await this.usersService.findById(userId);
+  //     if (!user) {
+  //       throw new UnauthorizedException('Invalid token or user not found');
+  //     }
+  //     const isSamePassword = user.password ? await bcrypt.compare(newPassword, user.password) : false;
+  //     if (isSamePassword) {
+  //       throw new BadRequestException('New password cannot be the same as the old one');
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(newPassword, 10);
+  //     const tokenRecord = await this.usersService.findResetToken(userId)
+  //     console.log(tokenRecord);
+
+  //     if (!tokenRecord) {
+  //       throw new BadRequestException('This reset link is invalid or has already been used.');
+  //     }
+  //     const match = await bcrypt.compare(resetPsw.token, tokenRecord.hashedPswToken);
+  //     if (!match) throw new ForbiddenException('Invalid reset token');
+
+  //     await this.usersService.updatePassword(userId, hashedPassword);
+  //     await this.usersService.updateTokenState(userId);
+  //     await this.usersService.deleteAllRefreshTokens(userId)
+  //   } catch (error) {
+  //     if (error instanceof HttpException) {
+  //       throw error;
+  //     }
+  //     if (error.name === 'TokenExpiredError') {
+  //       throw new BadRequestException('Reset token has expired. Please request a new one.');
+  //     } else if (error.name === 'JsonWebTokenError') {
+  //       throw new BadRequestException('Invalid reset token.');
+  //     } else {
+  //       throw new BadRequestException(error.message || 'An error occurred.');
+  //     }
+  //   }
+
+  // }
+  async resetPassword(resetPsw: ResetPasswordDto) {
+    const { newPassword, confirmPassword, token } = resetPsw;
+
     if (newPassword !== confirmPassword) {
       throw new BadRequestException('Passwords do not match');
     }
+
     try {
-      const payload = await this.jwtService.verifyAsync(resetPsw.token, {
+      // 1. Verify the JWT signature, expiry, audience and issuer.
+      const payload = await this.jwtService.verifyAsync(token, {
         secret: this.authConfiguration.jwtResetPswSecret,
         audience: this.authConfiguration.jwtAudience,
-        issuer: this.authConfiguration.jwtIssuer
+        issuer: this.authConfiguration.jwtIssuer,
       });
+
       const userId = payload.sub;
+
+      if (!userId) {
+        throw new BadRequestException('Invalid reset token.');
+      }
+
+      // 2. Find the account.
       const user = await this.usersService.findById(userId);
+
       if (!user) {
         throw new UnauthorizedException('Invalid token or user not found');
       }
-      const isSamePassword = user.password ? await bcrypt.compare(newPassword, user.password) : false;
-      if (isSamePassword) {
-        throw new BadRequestException('New password cannot be the same as the old one');
+
+      // 3. Do not allow password changes on deleted accounts.
+      if (user.isDeleted) {
+        throw new ForbiddenException(
+          'This account is deleted. Please recover your account first.',
+        );
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      const tokenRecord = await this.usersService.findResetToken(userId)
-      console.log(tokenRecord);
+      // 4. Find the corresponding unused reset-token record.
+      const tokenRecord = await this.usersService.findResetToken(userId);
 
       if (!tokenRecord) {
-        throw new BadRequestException('This reset link is invalid or has already been used.');
+        throw new BadRequestException(
+          'This reset link is invalid or has already been used.',
+        );
       }
-      const match = await bcrypt.compare(resetPsw.token, tokenRecord.hashedPswToken);
-      if (!match) throw new ForbiddenException('Invalid reset token');
 
-      await this.usersService.updatePassword(userId, hashedPassword);
-      await this.usersService.updateTokenState(userId);
-      await this.usersService.deleteAllRefreshTokens(userId)
+      // 5. Check database expiry as well as JWT expiry.
+      if (tokenRecord.expiresAt <= new Date()) {
+        throw new GoneException(
+          'Reset link has expired. Please request a new one.',
+        );
+      }
+
+      // 6. Verify that this JWT matches the stored hash.
+      const match = await bcrypt.compare(
+        token,
+        tokenRecord.hashedPswToken,
+      );
+
+      if (!match) {
+        throw new ForbiddenException('Invalid reset token');
+      }
+
+      // 7. Prevent reusing the existing password.
+      // Google-only users have no existing password, so this check is skipped.
+      if (
+        user.password &&
+        await bcrypt.compare(newPassword, user.password)
+      ) {
+        throw new BadRequestException(
+          'New password cannot be the same as the old one',
+        );
+      }
+
+      // 8. Hash the new password.
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // 9. Atomically update password, consume tokens and revoke sessions.
+      const completed = await this.usersService.completePasswordReset(
+        userId,
+        tokenRecord.id,
+        hashedPassword,
+      );
+
+      if (!completed) {
+        throw new BadRequestException(
+          'This reset link is invalid, expired or has already been used.',
+        );
+      }
+
+      return {
+        status: true,
+        message: 'Password successfully updated. Please log in again.',
+      };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error.name === 'TokenExpiredError') {
-        throw new BadRequestException('Reset token has expired. Please request a new one.');
-      } else if (error.name === 'JsonWebTokenError') {
-        throw new BadRequestException('Invalid reset token.');
-      } else {
-        throw new BadRequestException(error.message || 'An error occurred.');
-      }
-    }
 
+      if (error instanceof Error && error.name === 'TokenExpiredError') {
+        throw new GoneException(
+          'Reset token has expired. Please request a new one.',
+        );
+      }
+
+      if (error instanceof Error && error.name === 'JsonWebTokenError') {
+        throw new BadRequestException('Invalid reset token.');
+      }
+
+      throw new InternalServerErrorException(
+        'Unable to reset password. Please try again.',
+      );
+    }
   }
+  // async verifyRecoverAccount(dto: VerifyActDto) {
+  //   const { token } = dto;
+
+  //   try {
+  //     // 1. Verify JWT
+  //     const payload = await this.jwtService.verifyAsync(token, {
+  //       secret: this.authConfiguration.jwtRecoverAccountSecret,
+  //       audience: this.authConfiguration.jwtAudience,
+  //       issuer: this.authConfiguration.jwtIssuer,
+  //     });
+
+  //     const userId = payload.sub;
+
+  //     // 2. Get user
+  //     const user = await this.usersService.findById(userId);
+  //     if (!user) {
+  //       throw new UnauthorizedException('Invalid recovery token or user not found');
+  //     }
+
+  //     // 3. If already active → exit early (IMPORTANT OPTIMIZATION)
+  //     if (!user.deletedAt) {
+  //       return {
+  //         status: true,
+  //         message: "Account already active. You can log in.",
+  //       };
+  //     }
+
+  //     // 4. Get stored token
+  //     const tokenRecord = await this.usersService.findRecoverToken(userId);
+
+  //     if (!tokenRecord) {
+  //       throw new BadRequestException(
+  //         'Recovery link is invalid or already used.',
+  //       );
+  //     }
+
+  //     // 5. Validate token hash
+  //     const match = await bcrypt.compare(token, tokenRecord.hashedToken);
+
+  //     if (!match) {
+  //       throw new ForbiddenException('Invalid recovery token');
+  //     }
+
+  //     // 6. Check used
+  //     if (tokenRecord.used) {
+  //       throw new BadRequestException(
+  //         'Recovery link already used. Please request a new one.',
+  //       );
+  //     }
+
+  //     // 7. Check expiry
+  //     if (tokenRecord.expiresAt < new Date()) {
+  //       throw new GoneException(
+  //         'Recovery link has expired. Please request a new one.',
+  //       );
+  //     }
+
+  //     // 8. Restore account
+  //     await this.usersService.restoreAccount(userId);
+
+  //     // 9. Mark token used
+  //     await this.usersService.updateRecoverTokenState(userId);
+
+  //     // 10. Security cleanup
+  //     await this.usersService.deleteAllRefreshTokens(userId);
+  //     await this.usersService.deleteRecoverToken(userId);
+
+  //     return {
+  //       status: true,
+  //       message: 'Account successfully restored',
+  //     };
+  //   } catch (error) {
+  //     if (error instanceof HttpException) {
+  //       throw error;
+  //     }
+  //     if (error.name === 'TokenExpiredError') {
+  //       throw new BadRequestException(
+  //         'Recovery link has expired. Please request a new one.',
+  //       );
+  //     }
+
+  //     if (error.name === 'JsonWebTokenError') {
+  //       throw new BadRequestException('Invalid recovery token.');
+  //     }
+
+  //     throw new BadRequestException(error.message || 'An error occurred.');
+  //   }
+  // }
   async verifyRecoverAccount(dto: VerifyActDto) {
     const { token } = dto;
 
@@ -305,19 +548,33 @@ export class AuthService {
 
       // 2. Get user
       const user = await this.usersService.findById(userId);
+
       if (!user) {
-        throw new UnauthorizedException('Invalid recovery token or user not found');
+        throw new UnauthorizedException(
+          'Invalid recovery token or user not found',
+        );
       }
 
-      // 3. If already active → exit early (IMPORTANT OPTIMIZATION)
-      if (!user.deletedAt) {
+      // 3. Check account eligibility
+      if (!user.isDeleted || !user.deletedAt) {
         return {
           status: true,
-          message: "Account already active. You can log in.",
+          message: 'If this recovery request is valid, the account will be restored.',
         };
       }
 
-      // 4. Get stored token
+      // 4. Check the 30-day account recovery deadline
+      const recoveryDeadline = new Date(
+        user.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+      );
+
+      if (recoveryDeadline <= new Date()) {
+        throw new GoneException(
+          'Account recovery period has expired.',
+        );
+      }
+
+      // 5. Get stored token
       const tokenRecord = await this.usersService.findRecoverToken(userId);
 
       if (!tokenRecord) {
@@ -326,34 +583,32 @@ export class AuthService {
         );
       }
 
-      // 5. Validate token hash
+      // 6. Validate token hash
       const match = await bcrypt.compare(token, tokenRecord.hashedToken);
 
       if (!match) {
         throw new ForbiddenException('Invalid recovery token');
       }
 
-      // 6. Check used
+      // 7. Check used
       if (tokenRecord.used) {
         throw new BadRequestException(
           'Recovery link already used. Please request a new one.',
         );
       }
 
-      // 7. Check expiry
-      if (tokenRecord.expiresAt < new Date()) {
+      // 8. Check token expiry
+      if (tokenRecord.expiresAt <= new Date()) {
         throw new GoneException(
           'Recovery link has expired. Please request a new one.',
         );
       }
 
-      // 8. Restore account
+      // 9. Restore account
       await this.usersService.restoreAccount(userId);
 
-      // 9. Mark token used
-      await this.usersService.updateRecoverTokenState(userId);
-
       // 10. Security cleanup
+      await this.usersService.updateRecoverTokenState(userId);
       await this.usersService.deleteAllRefreshTokens(userId);
       await this.usersService.deleteRecoverToken(userId);
 
@@ -361,23 +616,34 @@ export class AuthService {
         status: true,
         message: 'Account successfully restored',
       };
+
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error.name === 'TokenExpiredError') {
-        throw new BadRequestException(
+
+      if (error instanceof Error && error.name === 'TokenExpiredError') {
+        throw new GoneException(
           'Recovery link has expired. Please request a new one.',
         );
       }
 
-      if (error.name === 'JsonWebTokenError') {
+      if (error instanceof Error && error.name === 'JsonWebTokenError') {
         throw new BadRequestException('Invalid recovery token.');
       }
 
-      throw new BadRequestException(error.message || 'An error occurred.');
+      throw new InternalServerErrorException(
+        'Unable to recover account. Please try again.',
+      );
     }
   }
+  async isGoogleAccountLinked(userId: string, googleId: string) {
+    return this.usersService.isGoogleAccountLinked(userId, googleId);
+  }
+  async softDeleteUserWithGoogle(userId: string, googleId: string) {
+    return this.usersService.softDeleteUserWithGoogle(userId, googleId);
+  }
+
   async verifyEmailChange(dto: VerifyEmailChangeDto) {
     const { token } = dto;
 
@@ -486,8 +752,9 @@ export class AuthService {
       if (!stored) {
         throw new UnauthorizedException('Refresh token invalid or revoked');
       }
-      if (stored.expiresAt < new Date()) {
+      if (stored.expiresAt <= new Date()) {
         await this.usersService.deleteRefreshToken(oldRefreshToken)
+        throw new UnauthorizedException('Refresh token expired');
       }
       return this.generateLoginTokens(user)
 
@@ -531,7 +798,9 @@ export class AuthService {
     );
 
     const changeEmailToken = await this.generateChangeEmailToken(user, newEmail)
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    const expiresAt = this.getExpiryDate(
+      this.authConfiguration.jwtChangeEmailExpiration!,
+    );
     const hashedEmailChangeToken = await bcrypt.hash(changeEmailToken, 10);
     await this.usersService.saveEmailChangeToken(user?.id, hashedEmailChangeToken, expiresAt)
     await sendEmailChangeVerification(newEmail, changeEmailToken)

@@ -9,24 +9,26 @@ export class AuthHelper {
 
   // Class method is private and async — works fine
   async verifyPasswordOrThrow(userId: string, password: string) {
-    console.log("🔥 VERIFY CALLED");
+    // console.log("🔥 VERIFY CALLED");
     const MAX_ATTEMPTS = 3;
     const LOCK_TIME = 1000 * 60 * 1; // 15 minutes
-    console.log("user2", userId);
+    // console.log("user2", userId);
     const freshUser = await this.prisma.user.findUnique({
       where: { id: userId },
     });
     if (freshUser?.isDeleted) {
-    
+
       const now = new Date();
 
       if (!freshUser.deletedAt) {
         throw new ForbiddenException("Invalid account state.");
       }
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-      const deletedAt = new Date(Date.now() - 29 * MS_PER_DAY);
-      // const deletedAt = new Date(freshUser.deletedAt);
+      // for debugging
+      // const deletedAt = new Date(Date.now() - 29 * MS_PER_DAY);
+      
+      // actual calculation
+      const deletedAt = new Date(freshUser.deletedAt);
       const diffInMs = now.getTime() - deletedAt.getTime();
       const diffInDays = Math.floor(diffInMs / MS_PER_DAY);
 
@@ -44,9 +46,9 @@ export class AuthHelper {
     if (!freshUser) {
       throw new UnauthorizedException('User not found');
     }
-    console.log("freshUser", freshUser);
+    // console.log("freshUser", freshUser);
     if (freshUser.authLockedUntil && freshUser.authLockedUntil > new Date()) {
-      console.log("i get here");
+      // console.log("i get here");
       const remainingTime = freshUser?.authLockedUntil?.getTime() - Date.now();
       const timeLeft = ms(remainingTime, { long: true });
 
@@ -59,18 +61,21 @@ export class AuthHelper {
         readableTime: timeLeft,
       });
     }
-    const isValid = freshUser.password ? await bcrypt.compare(password, freshUser.password) : false;
+    if (!freshUser.password) {
+      throw new UnauthorizedException(
+        'This account uses Google sign-in. Continue with Google, or reset your password to enable email and password login.',
+      );
+    }
 
+    const isValid = await bcrypt.compare(password, freshUser.password);
     if (!isValid) {
       const latestUser = await this.prisma.user.findUnique({ where: { id: userId } });
-      console.log("laes", latestUser);
+      // console.log("laes", latestUser);
 
       const attempts = (latestUser?.failedAuthAttempts || 0) + 1;
       const remainingAttempts = MAX_ATTEMPTS - attempts;
 
-      // const attempts = freshUser.failedAuthAttempts + 1
-      // const remainingAttempts = MAX_ATTEMPTS - attempts;
-      console.log("attempts", attempts, remainingAttempts);
+      // console.log("attempts", attempts, remainingAttempts);
 
       if (attempts >= MAX_ATTEMPTS) {
         console.log("is i")
@@ -94,8 +99,7 @@ export class AuthHelper {
         },
       });
 
-      // ✅ use this from now on
-      console.log("upde user", updatedUser);
+      console.log( "updatedUser", updatedUser);
       throw new UnauthorizedException(
         `Incorrect password. You have ${remainingAttempts} attempt(s) left`
       );

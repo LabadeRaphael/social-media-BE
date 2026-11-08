@@ -16,6 +16,7 @@ export const envValidator = Joi.object({
   JWT_ACCESS_EXPIRATION: Joi.string().default('1h'),
   JWT_REFRESH_EXPIRATION: Joi.string().default('7d'),
   JWT_RESETPSW_EXPIRATION: Joi.string().default('15m'),
+  JWT_RECOVER_ACT_EXPIRATION: Joi.string().default('15m'),
   JWT_CHANGE_EMAIL_EXPIRATION: Joi.string().default('15m'),
   JWT_TOKEN_AUDIENCE:Joi.string().default('Nestfinity'),
   JWT_TOKEN_ISSUER:Joi.string().default('Nestfinity'),

@@ -55,11 +55,11 @@ export class UsersService {
   }) {
     // 1. Only accept verified Google email addresses.
     if (!googleId || !email || emailVerified !== true) {
-  throw new ForbiddenException({
-    code: 'GOOGLE_EMAIL_UNVERIFIED',
-    message: 'Google account email must be verified.',
-  });
-}
+      throw new ForbiddenException({
+        code: 'GOOGLE_EMAIL_UNVERIFIED',
+        message: 'Google account email must be verified.',
+      });
+    }
 
     // 2. Check whether this Google account is already linked.
     const existingGoogleAccount =
@@ -79,9 +79,10 @@ export class UsersService {
       const user = existingGoogleAccount.user;
 
       if (user.isDeleted) {
-        throw new ForbiddenException(
-          'This account has been deleted. Please recover your account first.',
-        );
+        throw new ForbiddenException({
+          code: 'GOOGLE_ACCOUNT_DELETED',
+          message: 'This account has been deleted. Please recover your account first.',
+        });
       }
 
       return user;
@@ -93,16 +94,16 @@ export class UsersService {
     if (existingUser) {
       if (existingUser.isDeleted) {
         throw new ForbiddenException({
-  code: 'GOOGLE_ACCOUNT_DELETED',
-  message: 'This account has been deleted.',
-});
+          code: 'GOOGLE_ACCOUNT_DELETED',
+          message: 'This account has been deleted.',
+        });
       }
-      
-throw new ConflictException({
-  code: 'GOOGLE_ACCOUNT_EXISTS',
-  message:
-    'An account with this email already exists. Sign in using your existing method before linking Google.',
-});
+
+      throw new ConflictException({
+        code: 'GOOGLE_ACCOUNT_EXISTS',
+        message:
+          'An account with this email already exists. Sign in using your existing method before linking Google.',
+      });
     }
 
     // 4. Generate a unique username.
@@ -163,15 +164,127 @@ throw new ConflictException({
       where: { email },
     });
   }
-  async saveResetPswToken(userId: string, hashedPswToken: string, expiresAt: Date) {
-    return this.prisma.passwordResetToken.create({
-      data: {
-        hashedPswToken,
-        userId,
-        expiresAt
-      },
+  // async saveResetPswToken(userId: string, hashedPswToken: string, expiresAt: Date) {
+  //   return this.prisma.passwordResetToken.create({
+  //     data: {
+  //       hashedPswToken,
+  //       userId,
+  //       expiresAt
+  //     },
+  //   });
+  // }
+  async saveResetPswToken(
+    userId: string,
+    hashedPswToken: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      // Invalidate all previous unused reset tokens.
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId,
+          used: false,
+        },
+        data: {
+          used: true,
+        },
+      });
+
+      // Save the new reset token.
+      return tx.passwordResetToken.create({
+        data: {
+          hashedPswToken,
+          userId,
+          expiresAt,
+        },
+      });
     });
   }
+
+  async completePasswordReset(
+    userId: string,
+    tokenRecordId: string,
+    hashedPassword: string,
+  ) {
+    const now = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Atomically claim the reset token.
+      const claimedToken = await tx.passwordResetToken.updateMany({
+        where: {
+          id: tokenRecordId,
+          userId,
+          used: false,
+          expiresAt: {
+            gt: now,
+          },
+        },
+        data: {
+          used: true,
+        },
+      });
+
+      if (claimedToken.count !== 1) {
+        return false;
+      }
+
+      // 2. Update only an account that is still active.
+      const updatedUser = await tx.user.updateMany({
+        where: {
+          id: userId,
+          isDeleted: false,
+        },
+        data: {
+          password: hashedPassword,
+          failedAuthAttempts: 0,
+          authLockedUntil: null,
+        },
+      });
+
+      if (updatedUser.count !== 1) {
+        throw new ForbiddenException(
+          'This account is deleted. Please recover your account first.',
+        );
+      }
+
+      // 3. Invalidate any other unused reset tokens.
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId,
+          used: false,
+        },
+        data: {
+          used: true,
+        },
+      });
+
+      // 4. Revoke existing sessions.
+      await tx.refreshToken.deleteMany({
+        where: { userId },
+      });
+
+      return true;
+    });
+  }
+
+  async isGoogleAccountLinked(userId: string, googleId: string) {
+    const account = await this.prisma.oAuthAccount.findFirst({
+      where: {
+        provider: 'google',
+        providerAccountId: googleId,
+        userId,
+        user: {
+          isDeleted: false,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return !!account;
+  }
+
   async saveRecoverActToken(userId: string, hashedToken: string, expiresAt: Date) {
     return this.prisma.recoverAccountToken.create({
       data: {
@@ -195,6 +308,9 @@ throw new ConflictException({
 
     return this.prisma.passwordResetToken.findFirst({
       where: { userId, used: false },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
   }
 
@@ -279,16 +395,26 @@ throw new ConflictException({
     });
   }
   async getUserProfile(userId?: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         email: true,
         userName: true,
         avatarUrl: true,
+        password: true,
         blockedUsers: { select: { id: true } },
       },
     });
+
+    if (!user) return null;
+
+    const { password, ...userProfile } = user;
+
+    return {
+      ...userProfile,
+      hasPassword: Boolean(password),
+    };
   }
   async blockUser(userId?: string, targetUserId?: string) {
     console.log("reach here");
@@ -394,46 +520,153 @@ throw new ConflictException({
     return updatedUser;
   }
 
+  // async softDeleteUser(userId: string, password: string) {
+  //   const user = await this.prisma.user.findUnique({
+  //     where: { id: userId },
+  //   });
+  //   console.log(user);
+
+  //   if (!user) throw new ForbiddenException('User not found');
+  //   await this.authHelper.verifyPasswordOrThrow(
+  //     user.id,
+  //     password
+  //   );
+  //   // const passwordMatches = await bcrypt.compare(password, user.password);
+  //   // if (!passwordMatches) throw new ForbiddenException('Incorrect password');
+
+  //   // Soft delete
+  //   const deleteAccount = await this.prisma.user.update({
+  //     where: { id: userId },
+  //     data: {
+  //       isDeleted: true,
+  //       deletedAt: new Date(),
+  //     },
+  //     select: {
+  //       id: true,
+  //       userName: true,
+  //       email: true,
+  //       isDeleted: true
+  //     }
+
+  //   });
+  //   const deletionWarningState = await this.prisma.user.update({
+  //     where: { id: userId },
+  //     data: { deletionWarningSent: false },
+  //   })
+  //   console.log("deletionWarningState", deletionWarningState);
+
+  //   console.log(deleteAccount);
+
+  //   return deleteAccount
+
+  // }
   async softDeleteUser(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-    console.log(user);
 
-    if (!user) throw new ForbiddenException('User not found');
-    await this.authHelper.verifyPasswordOrThrow(
-      user.id,
-      password
-    );
-    // const passwordMatches = await bcrypt.compare(password, user.password);
-    // if (!passwordMatches) throw new ForbiddenException('Incorrect password');
+    if (!user) {
+      throw new ForbiddenException('User not found');
+    }
 
-    // Soft delete
-    const deleteAccount = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
+    if (user.isDeleted) {
+      throw new BadRequestException('Account is already deleted.');
+    }
+
+    // Verify the user's current password.
+    await this.authHelper.verifyPasswordOrThrow(user.id, password);
+
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.user.updateMany({
+        where: {
+          id: userId,
+          isDeleted: false,
+        },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletionWarningSent: false,
+        },
+      });
+
+      if (deleted.count !== 1) {
+        throw new BadRequestException('Account is already deleted.');
+      }
+
+      // Revoke all existing sessions.
+      await tx.refreshToken.deleteMany({
+        where: { userId },
+      });
+
+      return tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          userName: true,
+          email: true,
+          isDeleted: true,
+        },
+      });
+    });
+  }
+
+  async softDeleteUserWithGoogle(userId: string, googleId: string) {
+    // 1. Find the Google identity linked to this Nestfinity account.
+    const account = await this.prisma.oAuthAccount.findFirst({
+      where: {
+        provider: 'google',
+        providerAccountId: googleId,
+        userId,
       },
       select: {
         id: true,
-        userName: true,
-        email: true,
-        isDeleted: true
+      },
+    });
+
+    if (!account) {
+      throw new ForbiddenException(
+        'This Google account is not linked to your Nestfinity account.',
+      );
+    }
+
+    // 2. Soft-delete the account.
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.user.updateMany({
+        where: {
+          id: userId,
+          isDeleted: false,
+        },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletionWarningSent: false,
+        },
+      });
+
+      if (deleted.count !== 1) {
+        throw new BadRequestException(
+          'Account is already deleted.',
+        );
       }
 
+      // 3. Revoke all existing sessions.
+      await tx.refreshToken.deleteMany({
+        where: { userId },
+      });
+
+      // 4. Return the deleted account information.
+      return tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          userName: true,
+          email: true,
+          isDeleted: true,
+        },
+      });
     });
-    const deletionWarningState = await this.prisma.user.update({
-      where: { id: userId },
-      data: { deletionWarningSent: false },
-    })
-    console.log("deletionWarningState", deletionWarningState);
-
-    console.log(deleteAccount);
-
-    return deleteAccount
-
   }
+
   async deleteRecoverToken(userId: string) {
     return this.prisma.recoverAccountToken.deleteMany({
       where: { userId },

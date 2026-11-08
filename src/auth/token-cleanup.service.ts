@@ -26,64 +26,123 @@ export class TokenCleanupService {
     }
   }
   // 👇 NEW CRON JOB FOR ACCOUNT DELETION SYSTEM
-  @Cron('35 17 * * *')
-  async handleDeletedAccounts() {
-    const users = await this.prisma.user.findMany({
-      where: {
-        isDeleted: true,
-        deletionWarningSent: false,
-        deletedAt: { not: null },
-      },
-      select: {
-        id: true,
-        email: true,
-        userName: true,
-        deletedAt: true,
-        deletionWarningSent: true,
-      },
-    });
-    console.log("the user", users);
+  // @Cron('35 17 * * *')
+  // async handleDeletedAccounts() {
+  //   const users = await this.prisma.user.findMany({
+  //     where: {
+  //       isDeleted: true,
+  //       deletionWarningSent: false,
+  //       deletedAt: { not: null },
+  //     },
+  //     select: {
+  //       id: true,
+  //       email: true,
+  //       userName: true,
+  //       deletedAt: true,
+  //       deletionWarningSent: true,
+  //     },
+  //   });
+  //   console.log("the user", users);
 
-    const now = Date.now();
+  //   const now = Date.now();
 
-    for (const user of users) {
-      // const deletedAt = new Date(user.deletedAt!);
-      const deletedAt = new Date(
-        Date.now() - 29 * 24 * 60 * 60 * 1000
-      );
-      const diffInMs = now - deletedAt.getTime();
-      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  //   for (const user of users) {
+  //     // const deletedAt = new Date(user.deletedAt!);
+  //     const deletedAt = new Date(
+  //       Date.now() - 29 * 24 * 60 * 60 * 1000
+  //     );
+  //     const diffInMs = now - deletedAt.getTime();
+  //     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-      const remainingDays = 30 - diffInDays;
-      // tester
-      // const remainingDays = 30 - 30;
-      console.log("remaining days", remainingDays);
+  //     const remainingDays = 30 - diffInDays;
+  //     // tester
+  //     // const remainingDays = 30 - 30;
+  //     console.log("remaining days", remainingDays);
 
-      // ⚠️ Send warning email when 1 day left
-      if (remainingDays === 1 && !user.deletionWarningSent) {
-        await this.authService.generateAndSendRecoverToken(user, {
-          expiresIn: '24h',
-          emailType: 'warning',
-        })
-        this.logger.log(`Warning email sent to ${user.email}`);
-        const afterMsg = await this.prisma.user.update({
-          where: { id: user.id },
-          data: { deletionWarningSent: true },
-        })
-        console.log("after", afterMsg);
+  //     // ⚠️ Send warning email when 1 day left
+  //     if (remainingDays === 1 && !user.deletionWarningSent) {
+  //       await this.authService.generateAndSendRecoverToken(user, {
+  //         expiresIn: '24h',
+  //         emailType: 'warning',
+  //       })
+  //       this.logger.log(`Warning email sent to ${user.email}`);
+  //       const afterMsg = await this.prisma.user.update({
+  //         where: { id: user.id },
+  //         data: { deletionWarningSent: true },
+  //       })
+  //       console.log("after", afterMsg);
 
 
-      }
-      console.log("the user 2", users);
+  //     }
+  //     console.log("the user 2", users);
 
-      // ❌ Auto delete after 30 days
-      if (remainingDays <= 0) {
-        await this.prisma.user.delete({
-          where: { id: user.id },
-        });
+  //     // ❌ Auto delete after 30 days
+  //     if (remainingDays <= 0) {
+  //       await this.prisma.user.delete({
+  //         where: { id: user.id },
+  //       });
 
-        this.logger.log(`Deleted account: ${user.email}`);
-      }
+  //       this.logger.log(`Deleted account: ${user.email}`);
+  //     }
+  //   }
+  // }
+  @Cron('0 * * * *')
+async handleDeletedAccounts() {
+  const users = await this.prisma.user.findMany({
+    where: {
+      isDeleted: true,
+      deletedAt: { not: null },
+    },
+    select: {
+      id: true,
+      email: true,
+      userName: true,
+      deletedAt: true,
+      deletionWarningSent: true,
+    },
+  });
+
+  const DAY_IN_MS = 24 * 60 * 60 * 1000;
+  const RECOVERY_PERIOD = 30 * DAY_IN_MS;
+
+  for (const user of users) {
+    if (!user.deletedAt) continue;
+
+    const recoveryDeadline =
+      user.deletedAt.getTime() + RECOVERY_PERIOD;
+
+    const remainingMs = recoveryDeadline - Date.now();
+
+    // 1. Permanently delete after 30 days.
+    if (remainingMs <= 0) {
+      await this.prisma.user.delete({
+        where: { id: user.id },
+      });
+
+      this.logger.log(`Deleted account: ${user.email}`);
+      continue;
+    }
+
+    // 2. Send warning during the final 24 hours.
+    if (
+      remainingMs <= DAY_IN_MS &&
+      !user.deletionWarningSent
+    ) {
+      // Make the recovery token expire at the recovery deadline.
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+      await this.authService.generateAndSendRecoverToken(user, {
+        expiresIn: `${remainingSeconds}s`,
+        emailType: 'warning',
+      });
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { deletionWarningSent: true },
+      });
+
+      this.logger.log(`Warning email sent to ${user.email}`);
     }
   }
+}
 }
