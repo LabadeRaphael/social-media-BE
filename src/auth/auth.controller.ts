@@ -11,7 +11,8 @@ import { ResetPasswordDto } from './dto/reset-psw.dto';
 import { CookiesService } from './cookies.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigType } from '@nestjs/config';
+import { ConfigType} from '@nestjs/config';
+import { ConflictException} from '@nestjs/common';
 import * as ms from 'ms';
 import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
@@ -218,7 +219,53 @@ export class AuthController {
         ms(this.authConfiguration.jwtRefreshExpiration!),
       );
 
-    } finally {
+    } catch (error) {
+  let errorCode = 'google_auth_failed';
+
+  // User cancelled or denied Google authorization.
+  if (typeof req.query.error === 'string') {
+    errorCode =
+      req.query.error === 'access_denied'
+        ? 'google_access_denied'
+        : 'google_auth_failed';
+  }
+
+  // OAuth state or session validation failed.
+  else if (error instanceof UnauthorizedException) {
+    errorCode = 'google_session_invalid';
+  }
+
+  // Existing Nestfinity account.
+  else if (error instanceof ConflictException) {
+    errorCode = 'google_account_exists';
+  }
+
+  // Account or email verification restrictions.
+  else if (error instanceof ForbiddenException) {
+    const response = error.getResponse();
+
+    const code =
+      typeof response === 'object' && response !== null
+        ? (response as { code?: string }).code
+        : undefined;
+
+    if (code === 'GOOGLE_ACCOUNT_DELETED') {
+      errorCode = 'google_account_deleted';
+    } else if (code === 'GOOGLE_EMAIL_UNVERIFIED') {
+      errorCode = 'google_email_unverified';
+    }
+  }
+
+  const loginUrl = new URL(
+    'auth/login',
+    this.authConfiguration.frontendUrl,
+  );
+
+  loginUrl.searchParams.set('error', errorCode);
+
+  return res.redirect(loginUrl.toString());
+}
+    finally {
       // 13. Clear temporary OAuth cookies BEFORE sending the response.
       this.cookieService.clearOAuthCookie(
         res,

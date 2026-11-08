@@ -55,10 +55,11 @@ export class UsersService {
   }) {
     // 1. Only accept verified Google email addresses.
     if (!googleId || !email || emailVerified !== true) {
-      throw new ForbiddenException(
-        'Google account email must be verified.',
-      );
-    }
+  throw new ForbiddenException({
+    code: 'GOOGLE_EMAIL_UNVERIFIED',
+    message: 'Google account email must be verified.',
+  });
+}
 
     // 2. Check whether this Google account is already linked.
     const existingGoogleAccount =
@@ -91,14 +92,17 @@ export class UsersService {
 
     if (existingUser) {
       if (existingUser.isDeleted) {
-        throw new ForbiddenException(
-          'This account has been deleted. Please recover your account first.',
-        );
+        throw new ForbiddenException({
+  code: 'GOOGLE_ACCOUNT_DELETED',
+  message: 'This account has been deleted.',
+});
       }
-
-      throw new ConflictException(
-        'An account with this email already exists. Sign in using your existing method before linking Google.',
-      );
+      
+throw new ConflictException({
+  code: 'GOOGLE_ACCOUNT_EXISTS',
+  message:
+    'An account with this email already exists. Sign in using your existing method before linking Google.',
+});
     }
 
     // 4. Generate a unique username.
