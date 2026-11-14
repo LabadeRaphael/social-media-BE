@@ -303,6 +303,28 @@ export class UsersService {
       },
     });
   }
+  async consumeReauthenticationProof(
+    userId: string,
+    intent: string,
+    tokenHash: string,
+  ) {
+    const result = await this.prisma.reauthenticationProof.updateMany({
+      where: {
+        userId,
+        intent,
+        tokenHash,
+        usedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    return result.count === 1;
+  }
   async findResetToken(userId: string) {
     console.log("userId", userId);
 
@@ -560,6 +582,21 @@ export class UsersService {
   //   return deleteAccount
 
   // }
+  async createReauthenticationProof(
+    userId: string,
+    intent: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.reauthenticationProof.create({
+      data: {
+        userId,
+        intent,
+        tokenHash,
+        expiresAt,
+      },
+    });
+  }
   async softDeleteUser(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

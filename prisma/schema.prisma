@@ -36,6 +36,7 @@ model User {
   RecoverAccountToken RecoverAccountToken[]
   EmailChangeToken    EmailChangeToken[]
   oauthAccounts       OAuthAccount[]
+  reauthenticationProofs ReauthenticationProof[]
 }
 
 model RefreshToken {
@@ -144,6 +145,20 @@ model OAuthAccount {
   @@index([userId])
 }
 
+model ReauthenticationProof {
+  id        String    @id @default(uuid())
+  userId    String
+  intent    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, intent])
+  @@index([expiresAt])
+}
 enum Theme {
   LIGHT
   DARK

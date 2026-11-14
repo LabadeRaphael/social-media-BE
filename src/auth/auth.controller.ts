@@ -137,15 +137,25 @@ export class AuthController {
   async googleReauthenticate(
     @Req() req: Request & { user: { sub: string } },
     @Res({ passthrough: true }) res: Response,
+    @Query('intent') intent?: string,
   ) {
+    const allowedIntents = ['delete-account', 'change-email'];
+
+    if (intent && !allowedIntents.includes(intent)) {
+      throw new BadRequestException(
+        'Invalid Google reauthentication intent.',
+      );
+    }
+    const authorizationIntent =
+      intent ?? 'delete-account';
     const {
       authorizationUrl,
       state,
       nonce,
       codeVerifier,
-      intent,
+      intent: storedIntent,
     } = await this.googleOidcService.createAuthorizationRequest(
-      'delete-account',
+      authorizationIntent as 'delete-account' | 'change-email',
     );
 
     const maxAge = 5 * 60 * 1000;
@@ -163,7 +173,7 @@ export class AuthController {
     );
 
     this.cookieService.setOAuthCookie(
-      res, 'google_oauth_intent', intent, maxAge,
+      res, 'google_oauth_intent', storedIntent, maxAge,
     );
 
     this.cookieService.setOAuthCookie(
@@ -212,7 +222,7 @@ export class AuthController {
           'Google sign-in was cancelled or denied',
         );
       }
-      if (intent !== 'login' && intent !== 'delete-account') {
+      if (intent !== 'login' && intent !== 'change-email' && intent !== 'delete-account') {
         throw new UnauthorizedException(
           'Invalid Google authentication session.',
         );
@@ -366,7 +376,79 @@ export class AuthController {
         ).toString();
 
 
-      } else {
+      } else if (intent === 'change-email') {
+        const maxAge = 5 * 60 * 1000;
+        if (!oauthUserId) {
+          throw new UnauthorizedException(
+            'Google authentication session has expired.',
+          );
+        }
+
+        // 1. Retrieve the existing Nestfinity access token.
+        const accessToken = this.cookieService.getAuthCookie(
+          req,
+          'accessToken',
+        );
+
+        if (!accessToken) {
+          throw new UnauthorizedException(
+            'Your Nestfinity session has expired. Please sign in again.',
+          );
+        }
+
+        // 2. Verify the Nestfinity session.
+        const payload = await this.jwtService.verifyAsync<{ sub: string }>(
+          accessToken,
+          {
+            secret: this.authConfiguration.jwtAccessSecret,
+            audience: this.authConfiguration.jwtAudience,
+            issuer: this.authConfiguration.jwtIssuer,
+          },
+        );
+
+        // 3. Ensure the same user initiated reauthentication.
+        if (payload.sub !== oauthUserId) {
+          throw new ForbiddenException(
+            'Your account verification session does not match.',
+          );
+        }
+
+        // 4. Verify that this Google account belongs to this user.
+        const isGoogleAccountLinked =
+          await this.authService.isGoogleAccountLinked(
+            oauthUserId,
+            claims.sub,
+          );
+
+        if (!isGoogleAccountLinked) {
+          throw new ForbiddenException(
+            'This Google account is not linked to your Nestfinity account.',
+          );
+        }
+
+        // 5. Generate a single-use reauthentication proof.
+        const proof = await this.authService.generateReauthenticationProof(
+          oauthUserId,
+          'change-email',
+        );
+
+        // 6. Store the proof in an HTTP-only cookie.
+        this.cookieService.setOAuthCookie(
+          res,
+          'google_reauth_proof',
+          proof,
+          maxAge
+        );
+
+        // Reauthentication succeeded.
+        // The single-use proof will be issued here in the next step.
+
+        redirectUrl = new URL(
+          'dashboard/chats?google_verified=change-email',
+          this.authConfiguration.frontendUrl,
+        ).toString();
+      }
+      else {
         // Normal Google login.
         const {
           accessToken,
@@ -396,7 +478,7 @@ export class AuthController {
       }
 
     } catch (error) {
-        console.error('Google OAuth callback failed:', error);
+      console.error('Google OAuth callback failed:', error);
       let errorCode = 'google_auth_failed';
       // User cancelled or denied Google authorization.
       if (typeof req.query.error === 'string') {
@@ -570,17 +652,47 @@ export class AuthController {
       throw new UnauthorizedException('Access token invalid or expired');
     }
   }
+  // @Post('request-email-change')
+  // requestEmailChange(
+  //   @Req() req: Request & { user: { sub: string } },
+  //   @Body() dto: RequestEmailChangeDto,
+  // ) {
+  //   console.log("request-email-change");
+
+  //   const userId = req?.user?.sub
+  //   return this.authService.requestEmailChange(userId, dto);
+  // }
   @Post('request-email-change')
-  requestEmailChange(
-    @Req() req: Request & { user: { sub: string } },
+  async requestEmailChange(
+    @Req() req: Request & {
+      user: { sub: string };
+      // cookies?: Record<string, string>;
+    },
     @Body() dto: RequestEmailChangeDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    console.log("request-email-change");
+    const userId = req.user.sub;
 
-    const userId = req?.user?.sub
-    return this.authService.requestEmailChange(userId, dto);
+    const proof = this.cookieService.getAuthCookie(
+      req,
+      'google_reauth_proof',
+    );
+
+    const result = await this.authService.requestEmailChange(
+      userId,
+      dto,
+      proof,
+    );
+
+    if (proof) {
+      this.cookieService.clearOAuthCookie(
+        res,
+        'google_reauth_proof',
+      );
+    }
+
+    return result;
   }
-
   @AllowAnonymous()
   @Post('verify-email-change')
   async verifyEmailChange

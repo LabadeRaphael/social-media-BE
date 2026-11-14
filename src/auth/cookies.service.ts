@@ -36,7 +36,7 @@ export class CookiesService {
     res.cookie(name, value, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge,
       path: '/',
     });
@@ -46,7 +46,7 @@ export class CookiesService {
     res.clearCookie(name, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
     });
   }
