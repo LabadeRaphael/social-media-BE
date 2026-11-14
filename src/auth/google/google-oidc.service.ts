@@ -52,7 +52,7 @@ export class GoogleOidcService {
 
 
   async createAuthorizationRequest(
-    intent: 'login'| 'change-email' | 'delete-account' = 'login',
+    intent: 'login'| 'change-email' | 'delete-account' | 'set-password' = 'login',
   ) {
     const configuration = await this.getConfiguration();
 

@@ -18,6 +18,7 @@ import { RecoverDto } from './dto/recover-account.dto';
 import { VerifyActDto } from './dto/verify-account.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import { VerifyEmailChangeDto } from './dto/verify-email-change';
+import { ReauthenticationService } from './reauthentication/reauthentication.service';
 
 @Controller('auth')
 export class AuthController {
@@ -28,12 +29,13 @@ export class AuthController {
     private readonly authConfiguration: ConfigType<typeof authConfig>,
     private readonly cookieService: CookiesService,
     private readonly googleOidcService: GoogleOidcService,
+    private readonly reauthenticationService: ReauthenticationService,
   ) { }
   @AllowAnonymous()
   @Post('signup')
   async createUser(@Body() user: RegisterDto) {
     await this.authService.register(user);
-    return { message: 'Signup successful', status: true };
+    return { message: 'Signup successful redirecting', status: true };
   }
   @AllowAnonymous()
   @Post('login')
@@ -44,7 +46,7 @@ export class AuthController {
     const refreshExpirationMs = ms(this.authConfiguration.jwtRefreshExpiration);
     this.cookieService.setAuthCookie(res, 'accessToken', accessToken, accessExpirationMs);
     this.cookieService.setAuthCookie(res, 'refreshToken', refreshToken, refreshExpirationMs); // 7d
-    return { message: 'Login successful', status: true };
+    return { message: 'Login successful redirecting', status: true };
 
   }
 
@@ -139,7 +141,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
     @Query('intent') intent?: string,
   ) {
-    const allowedIntents = ['delete-account', 'change-email'];
+    const allowedIntents = ['delete-account', 'change-email', 'set-password'];
 
     if (intent && !allowedIntents.includes(intent)) {
       throw new BadRequestException(
@@ -155,7 +157,7 @@ export class AuthController {
       codeVerifier,
       intent: storedIntent,
     } = await this.googleOidcService.createAuthorizationRequest(
-      authorizationIntent as 'delete-account' | 'change-email',
+      authorizationIntent as 'delete-account' | 'change-email' | 'set-password',
     );
 
     const maxAge = 5 * 60 * 1000;
@@ -214,6 +216,7 @@ export class AuthController {
       req,
       'google_oauth_user_id',
     );
+
     let redirectUrl = `${this.authConfiguration.frontendUrl}/dashboard/chats`;
     try {
       // 2. Check whether Google returned an error.
@@ -222,7 +225,7 @@ export class AuthController {
           'Google sign-in was cancelled or denied',
         );
       }
-      if (intent !== 'login' && intent !== 'change-email' && intent !== 'delete-account') {
+      if (intent !== 'login' && intent !== 'change-email' && intent !== 'delete-account' && intent !== 'set-password') {
         throw new UnauthorizedException(
           'Invalid Google authentication session.',
         );
@@ -426,8 +429,13 @@ export class AuthController {
           );
         }
 
+        // // 5. Generate a single-use reauthentication proof.
+        // const proof = await this.authService.generateReauthenticationProof(
+        //   oauthUserId,
+        //   'change-email',
+        // );
         // 5. Generate a single-use reauthentication proof.
-        const proof = await this.authService.generateReauthenticationProof(
+        const proof = await this.reauthenticationService.generateReauthenticationProof(
           oauthUserId,
           'change-email',
         );
@@ -444,7 +452,91 @@ export class AuthController {
         // The single-use proof will be issued here in the next step.
 
         redirectUrl = new URL(
-          'dashboard/chats?google_verified=change-email',
+          'dashboard/chats?active=settings&google_verified=change-email',
+          this.authConfiguration.frontendUrl,
+        ).toString();
+
+      }
+      else if (intent === 'set-password') {
+        const maxAge = 5 * 60 * 1000;
+
+        // 1. Ensure the OAuth session belongs to an existing user.
+        if (!oauthUserId) {
+          throw new UnauthorizedException(
+            'Google authentication session has expired.',
+          );
+        }
+
+        // 2. Retrieve the existing Nestfinity access token.
+        const accessToken = this.cookieService.getAuthCookie(
+          req,
+          'accessToken',
+        );
+
+        if (!accessToken) {
+          throw new UnauthorizedException(
+            'Your Nestfinity session has expired. Please sign in again.',
+          );
+        }
+
+        // 3. Verify the existing Nestfinity session.
+        const payload = await this.jwtService.verifyAsync<{
+          sub: string;
+        }>(accessToken, {
+          secret: this.authConfiguration.jwtAccessSecret,
+          audience: this.authConfiguration.jwtAudience,
+          issuer: this.authConfiguration.jwtIssuer,
+        });
+
+        // 4. Ensure the same user initiated reauthentication.
+        if (payload.sub !== oauthUserId) {
+          throw new ForbiddenException(
+            'Your account verification session does not match.',
+          );
+        }
+
+        // 5. Verify that this Google account belongs to this user.
+        const isGoogleAccountLinked =
+          await this.authService.isGoogleAccountLinked(
+            oauthUserId,
+            claims.sub,
+          );
+
+        if (!isGoogleAccountLinked) {
+          throw new ForbiddenException(
+            'This Google account is not linked to your Nestfinity account.',
+          );
+        }
+
+        // 6. Ensure this is a Google-only account.
+        const hasPassword =
+          await this.authService.userHasPassword(oauthUserId);
+
+        if (hasPassword) {
+          throw new ForbiddenException(
+            'This account already has a password. Use the normal password-change process.',
+          );
+        }
+
+        // 7. Generate a single-use proof for setting a password.
+        const proof =
+          await this.reauthenticationService.generateReauthenticationProof(
+            oauthUserId,
+            'set-password',
+          );
+        console.log("set-password", proof);
+
+        // 8. Store the proof in an HTTP-only cookie.
+        this.cookieService.setOAuthCookie(
+          res,
+          'google_reauth_proof',
+          proof,
+          maxAge,
+        );
+
+        // 9. Redirect to Settings after successful verification.
+        redirectUrl = new URL(
+          'dashboard/chats?active=settings&google_verified=set-password',
           this.authConfiguration.frontendUrl,
         ).toString();
       }
@@ -690,6 +782,7 @@ export class AuthController {
         'google_reauth_proof',
       );
     }
+    console.log(result);
 
     return result;
   }

@@ -10,6 +10,7 @@ import { CookiesService } from './cookies.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { AuthHelper } from './helpers/verify-password.helper';
 import { GoogleOidcService } from './google/google-oidc.service';
+import { ReauthenticationModule } from './reauthentication/reauthentication.module';
 const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [ConfigModule.forFeature(authConfig)],
   inject: [authConfig.KEY],
@@ -26,7 +27,7 @@ const jwtProvider = (): JwtModuleAsyncOptions => ({
   imports: [
     UsersModule, ConfigModule.forFeature(authConfig),
     JwtModule.registerAsync(jwtProvider()),
-    PrismaModule
+    PrismaModule, ReauthenticationModule
   ],
   controllers: [AuthController],
   providers: [AuthService, CookiesService,AuthHelper,GoogleOidcService],

@@ -18,20 +18,57 @@ const brevo = new BrevoClient({
   maxRetries: 2,
 });
 
-const sendEmail = (
+// const sendEmail = (
+//   to: string,
+//   subject: string,
+//   html: string,
+// ) => {
+//   return brevo.transactionalEmails.sendTransacEmail({
+//     sender: {
+//       name: senderName,
+//       email: senderEmail,
+//     },
+//     to: [{ email: to }],
+//     subject,
+//     htmlContent: html,
+//   });
+// };
+
+const sendEmail = async (
   to: string,
   subject: string,
   html: string,
 ) => {
-  return brevo.transactionalEmails.sendTransacEmail({
-    sender: {
-      name: senderName,
-      email: senderEmail,
-    },
-    to: [{ email: to }],
-    subject,
-    htmlContent: html,
-  });
+  try {
+    const response =
+      await brevo.transactionalEmails.sendTransacEmail({
+        sender: {
+          name: senderName,
+          email: senderEmail,
+        },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      });
+
+    console.log("Brevo email accepted:", {
+      to,
+      subject,
+      response,
+    });
+
+    return response;
+  } catch (error: any) {
+    console.error("Brevo email sending failed:", {
+      to,
+      subject,
+      message: error.message,
+      response: error.response?.body,
+      status: error.response?.statusCode,
+    });
+
+    throw error;
+  }
 };
 
 // Shared layout for consistent spacing and mobile-friendly email rendering.
@@ -129,18 +166,18 @@ const sendResetPasswordEmail = (to: string, token: string) => {
     ${emailHeading('Password Reset Request')}
 
     ${emailParagraph(
-      'You requested to reset your password.',
-    )}
+    'You requested to reset your password.',
+  )}
 
     ${emailParagraph(
-      'Click the button below to choose a new password:',
-    )}
+    'Click the button below to choose a new password:',
+  )}
 
     ${emailButton(resetUrl, 'Reset Password')}
 
     ${emailParagraph(
-      'For your security, this link will expire in 15 minutes.',
-    )}
+    'For your security, this link will expire in 15 minutes.',
+  )}
 
     <p style="
       margin: 20px 0 0;
@@ -163,18 +200,18 @@ const sendRecoverAccountEmail = (to: string, token: string) => {
     ${emailHeading('Account Recovery Request')}
 
     ${emailParagraph(
-      'We received a request to restore your Nestfinity account.',
-    )}
+    'We received a request to restore your Nestfinity account.',
+  )}
 
     ${emailParagraph(
-      'If you initiated this request, use the button below to continue recovering your account:',
-    )}
+    'If you initiated this request, use the button below to continue recovering your account:',
+  )}
 
     ${emailButton(recoverUrl, 'Recover Account')}
 
     ${emailParagraph(
-      'For your security, this link will expire in 15 minutes.',
-    )}
+    'For your security, this link will expire in 15 minutes.',
+  )}
 
     <p style="
       margin: 20px 0 0;
@@ -193,7 +230,7 @@ const sendWarningRecoverAccount = (to: string, token: string) => {
   const recoverUrl = `${process.env.FRONTEND_URL}/auth/recover-account-verify?token=${token}`;
 
   const html = emailLayout(`
-    ${emailHeading('⚠️ Final Warning')}
+    ${emailHeading('Final Account Deletion Reminder')}
 
     <div style="
       margin: 0 0 18px;
@@ -214,12 +251,12 @@ const sendWarningRecoverAccount = (to: string, token: string) => {
     </div>
 
     ${emailParagraph(
-      'If you still want to keep your account, use the button below to restore it.',
-    )}
+    'If you want to keep your account, restore it before the scheduled deletion deadline using the button below.',
+  )}
 
     ${emailParagraph(
-      'If the account is permanently deleted, its data may no longer be recoverable.',
-    )}
+    'If the account is permanently deleted, its data may no longer be recoverable.',
+  )}
 
     ${emailButton(recoverUrl, 'Restore My Account')}
 
@@ -230,13 +267,14 @@ const sendWarningRecoverAccount = (to: string, token: string) => {
       line-height: 1.7;
     ">
       This is your final reminder before the scheduled deletion.
-      Please restore your account before the deadline if you want to keep it.
+      No further action is required if you no longer wish to
+      retain your account.
     </p>
   `);
 
   return sendEmail(
     to,
-    '⚠️ Final Warning: Account Deletion in 24 Hours',
+    'Final Warning: Account Deletion in 24 Hours',
     html,
   );
 };
@@ -245,21 +283,21 @@ const sendEmailChangeVerification = (to: string, token: string) => {
   const verifyUrl = `${process.env.FRONTEND_URL}/auth/verify-email-change?token=${token}`;
 
   const html = emailLayout(`
-    ${emailHeading('🔐 Email Change Request')}
+    ${emailHeading('Email Change Request')}
 
     ${emailParagraph(
-      'We received a request to change the email address associated with your Nestfinity account.',
-    )}
+    'We received a request to change the email address associated with your Nestfinity account.',
+  )}
 
     ${emailParagraph(
-      'If you initiated this request, confirm the change using the button below.',
-    )}
+    'If you initiated this request, confirm the change using the button below.',
+  )}
 
     ${emailButton(verifyUrl, 'Confirm Email Change')}
 
     ${emailParagraph(
-      'For your security, this verification link is time-limited. Please use it promptly.',
-    )}
+    'For your security, this link will expire in 15 minutes.',
+  )}
 
     <div style="
       margin-top: 24px;
@@ -273,7 +311,7 @@ const sendEmailChangeVerification = (to: string, token: string) => {
         font-size: 14px;
         font-weight: bold;
       ">
-        Wasn't this you?
+        Didn't request this change?
       </p>
 
       <p style="
@@ -282,14 +320,14 @@ const sendEmailChangeVerification = (to: string, token: string) => {
         font-size: 13px;
         line-height: 1.8;
       ">
-        If you did not request this change, do not click the confirmation button.
-        If you suspect someone has accessed your account, contact Nestfinity
-        support through the app's official support channel.
+        If you did not request this change, do not click the
+        confirmation button. Your email address will not be
+        changed unless the verification process is completed.
       </p>
     </div>
   `);
 
-  return sendEmail(to, '🔐 Confirm Your Email Change', html);
+  return sendEmail(to, 'Confirm Your Email Change', html);
 };
 
 export {

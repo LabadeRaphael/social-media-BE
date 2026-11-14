@@ -36,7 +36,7 @@ export class UsersController {
     return await this.userService.getUserByUsername(normalized, currentUserId);
 
   }
-  
+
   @Get('profile')
   async getCurrentUser(@Req() req: Request & { user?: { sub: string } }) {
     const currentUserId = req.user?.sub;
@@ -70,10 +70,25 @@ export class UsersController {
       password: body.password,
       re_auth_psw: body.re_auth_psw,
     };
-    const refreshToken = this.cookieService.getAuthCookie(req, 'refreshToken');
-    try {
+    const refreshToken = this.cookieService.getAuthCookie(
+      req,
+      'refreshToken',
+    );
 
-      return this.userService.updateUser(userId, updateData, avatar);
+    const googleProof = this.cookieService.getAuthCookie(
+      req,
+      'google_reauth_proof',
+    );
+    try {
+      const result = await this.userService.updateUser(
+        userId,
+        updateData,
+        avatar,
+        googleProof,
+      );
+
+      return result;
+      // return this.userService.updateUser(userId, updateData, avatar);
     } catch (error) {
       if (
         error instanceof ForbiddenException &&
@@ -88,6 +103,13 @@ export class UsersController {
       }
 
       throw error;
+    } finally {
+      if (body.password) {
+        this.cookieService.clearOAuthCookie(
+          res,
+          'google_reauth_proof',
+        );
+      }
     }
   }
 

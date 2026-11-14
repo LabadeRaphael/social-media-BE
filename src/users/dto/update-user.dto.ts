@@ -19,9 +19,9 @@ export class UpdateUserDto {
   @Transform(({ value }) => String(value)?.trim())
   password?: string;
   
-  @IsString({ message: 'rePassword must be a string' })
-  @IsNotEmpty()
-  @MinLength(6, { message: 'rePassword must be at least 6 characters' })
-  @Transform(({ value }) => String(value)?.trim())
-  re_auth_psw!: string;
+  @IsOptional()
+  @IsString({ message: 'Reauth-Password must be a string' })
+  // @MinLength(6, { message: 'rePassword must be at least 6 characters' })
+  // @Transform(({ value }) => String(value)?.trim())
+  re_auth_psw?: string;
 }

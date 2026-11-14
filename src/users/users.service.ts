@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from './../utils/prisma.error';
 import { LoginDto } from 'src/auth/dto/login.dto';
@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthHelper } from 'src/auth/helpers/verify-password.helper';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { randomBytes } from 'crypto';
+import { ReauthenticationService } from 'src/auth/reauthentication/reauthentication.service';
 
 @Injectable()
 export class UsersService {
@@ -15,6 +16,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly authHelper: AuthHelper,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly reauthenticationService: ReauthenticationService,
   ) { }
 
   async register(user: RegisterDto, hashedPassword: string) {
@@ -284,7 +286,16 @@ export class UsersService {
 
     return !!account;
   }
+  async hasPassword(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        password: true,
+      },
+    });
 
+    return Boolean(user?.password);
+  }
   async saveRecoverActToken(userId: string, hashedToken: string, expiresAt: Date) {
     return this.prisma.recoverAccountToken.create({
       data: {
@@ -303,28 +314,28 @@ export class UsersService {
       },
     });
   }
-  async consumeReauthenticationProof(
-    userId: string,
-    intent: string,
-    tokenHash: string,
-  ) {
-    const result = await this.prisma.reauthenticationProof.updateMany({
-      where: {
-        userId,
-        intent,
-        tokenHash,
-        usedAt: null,
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-      data: {
-        usedAt: new Date(),
-      },
-    });
+  // async consumeReauthenticationProof(
+  //   userId: string,
+  //   intent: string,
+  //   tokenHash: string,
+  // ) {
+  //   const result = await this.prisma.reauthenticationProof.updateMany({
+  //     where: {
+  //       userId,
+  //       intent,
+  //       tokenHash,
+  //       usedAt: null,
+  //       expiresAt: {
+  //         gt: new Date(),
+  //       },
+  //     },
+  //     data: {
+  //       usedAt: new Date(),
+  //     },
+  //   });
 
-    return result.count === 1;
-  }
+  //   return result.count === 1;
+  // }
   async findResetToken(userId: string) {
     console.log("userId", userId);
 
@@ -477,70 +488,70 @@ export class UsersService {
 
     });
   }
-  async updateUser(
-    userId: string,
-    data: { userName?: string; password?: string; re_auth_psw: string },
-    avatar?: Express.Multer.File
-  ) {
-    const updateData: any = {};
+  // async updateUser(
+  //   userId: string,
+  //   data: { userName?: string; password?: string; re_auth_psw: string },
+  //   avatar?: Express.Multer.File
+  // ) {
+  //   const updateData: any = {};
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+  //   const user = await this.prisma.user.findUnique({
+  //     where: { id: userId },
+  //   });
 
-    if (!user) throw new NotFoundException('User not found');
+  //   if (!user) throw new NotFoundException('User not found');
 
-    // validate password input
-    if (!data.re_auth_psw) {
-      throw new BadRequestException('Password is required');
-    }
+  //   // validate password input
+  //   if (!data.re_auth_psw) {
+  //     throw new BadRequestException('Password is required');
+  //   }
 
-    // verify password
-    await this.authHelper.verifyPasswordOrThrow(user.id, data.re_auth_psw);
+  //   // verify password
+  //   await this.authHelper.verifyPasswordOrThrow(user.id, data.re_auth_psw);
 
 
 
-    // handle avatar
-    let avatarUrl: string | undefined;
+  //   // handle avatar
+  //   let avatarUrl: string | undefined;
 
-    if (avatar && !avatar.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
-    }
+  //   if (avatar && !avatar.mimetype.startsWith('image/')) {
+  //     throw new BadRequestException('Only image files are allowed');
+  //   }
 
-    if (avatar) {
-      const uploadResult = await this.cloudinaryService.uploadFile(avatar);
+  //   if (avatar) {
+  //     const uploadResult = await this.cloudinaryService.uploadFile(avatar);
 
-      if (!('secure_url' in uploadResult)) {
-        throw new BadRequestException('Cloudinary upload failed');
-      }
+  //     if (!('secure_url' in uploadResult)) {
+  //       throw new BadRequestException('Cloudinary upload failed');
+  //     }
 
-      avatarUrl = uploadResult.secure_url;
-    }
+  //     avatarUrl = uploadResult.secure_url;
+  //   }
 
-    // update fields
-    if (data.userName) updateData.userName = data.userName;
+  //   // update fields
+  //   if (data.userName) updateData.userName = data.userName;
 
-    if (data.password) {
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-      updateData.password = hashedPassword;
-    }
+  //   if (data.password) {
+  //     const hashedPassword = await bcrypt.hash(data.password, 10);
+  //     updateData.password = hashedPassword;
+  //   }
 
-    if (avatarUrl) {
-      updateData.avatarUrl = avatarUrl;
-    }
+  //   if (avatarUrl) {
+  //     updateData.avatarUrl = avatarUrl;
+  //   }
 
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: updateData,
-      select: {
-        id: true,
-        userName: true,
-        email: true,
-        avatarUrl: true,
-      },
-    });
-    return updatedUser;
-  }
+  //   const updatedUser = await this.prisma.user.update({
+  //     where: { id: userId },
+  //     data: updateData,
+  //     select: {
+  //       id: true,
+  //       userName: true,
+  //       email: true,
+  //       avatarUrl: true,
+  //     },
+  //   });
+  //   return updatedUser;
+  // }
 
   // async softDeleteUser(userId: string, password: string) {
   //   const user = await this.prisma.user.findUnique({
@@ -582,21 +593,125 @@ export class UsersService {
   //   return deleteAccount
 
   // }
-  async createReauthenticationProof(
+  async updateUser(
     userId: string,
-    intent: string,
-    tokenHash: string,
-    expiresAt: Date,
+    data: {
+      userName?: string;
+      password?: string;
+      re_auth_psw?: string;
+    },
+    avatar?: Express.Multer.File,
+    googleProof?: string,
   ) {
-    return this.prisma.reauthenticationProof.create({
-      data: {
-        userId,
-        intent,
-        tokenHash,
-        expiresAt,
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updateData: any = {};
+
+    // Only require reauthentication when changing a password.
+    if (data.password) {
+      if (user.password) {
+        if (!data.re_auth_psw) {
+          throw new UnauthorizedException(
+            'Please enter your current password.',
+          );
+        }
+
+        await this.authHelper.verifyPasswordOrThrow(
+          user.id,
+          data.re_auth_psw,
+        );
+      } else {
+        if (!googleProof) {
+          throw new UnauthorizedException(
+            'Please verify your Google account first.',
+          );
+        }
+
+        // Verify a one-time proof with intent: 'set-password'.
+        await this.reauthenticationService.verifyReauthenticationProof(
+          user.id,
+          'set-password',
+          googleProof,
+        );
+      }
+
+      updateData.password = await bcrypt.hash(data.password, 10);
+    }
+
+    // Update username only when it actually changes.
+    if (
+      data.userName !== undefined &&
+      data.userName !== user.userName
+    ) {
+      updateData.userName = data.userName;
+    }
+
+    if (avatar && !avatar.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    if (avatar) {
+      const uploadResult = await this.cloudinaryService.uploadFile(avatar);
+
+      if (!('secure_url' in uploadResult)) {
+        throw new BadRequestException('Cloudinary upload failed');
+      }
+
+      updateData.avatarUrl = uploadResult.secure_url;
+    }
+
+    // Nothing changed: don't make an unnecessary database update.
+    if (Object.keys(updateData).length === 0) {
+      return {
+        message: 'No changes to save.',
+        status: true,
+        user: {
+          id: user.id,
+          userName: user.userName,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+        },
+      };
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        userName: true,
+        email: true,
+        avatarUrl: true,
       },
     });
+
+    return {
+      message: 'Profile updated successfully.',
+      status: true,
+      user: updatedUser,
+    };
   }
+  // async createReauthenticationProof(
+  //   userId: string,
+  //   intent: string,
+  //   tokenHash: string,
+  //   expiresAt: Date,
+  // ) {
+  //   return this.prisma.reauthenticationProof.create({
+  //     data: {
+  //       userId,
+  //       intent,
+  //       tokenHash,
+  //       expiresAt,
+  //     },
+  //   });
+  // }
   async softDeleteUser(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

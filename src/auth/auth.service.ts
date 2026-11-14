@@ -1,5 +1,5 @@
 import { sendEmailChangeVerification, sendRecoverAccountEmail, sendResetPasswordEmail, sendWarningRecoverAccount } from './../utils/mailer';
-import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException, HttpException } from '@nestjs/common';
+import { BadRequestException, Body, ForbiddenException, GoneException, Inject, Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException, HttpException, ConflictException } from '@nestjs/common';
 import { UsersService } from './../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -18,6 +18,7 @@ import { VerifyEmailChangeDto } from './dto/verify-email-change';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import * as ms from 'ms';
 import { createHash, randomBytes } from 'crypto';
+import { ReauthenticationService } from './reauthentication/reauthentication.service';
 type SafeUser = {
   id: string;
   email: string;
@@ -30,7 +31,8 @@ export class AuthService {
     @Inject(authConfig.KEY)
     private readonly authConfiguration: ConfigType<typeof authConfig>,
     private readonly jwtService: JwtService,
-    private readonly authHelper: AuthHelper
+    private readonly authHelper: AuthHelper,
+    private readonly reauthenticationService: ReauthenticationService,
   ) { }
   private getExpiryDate(expiresIn: string): Date {
     const duration = ms(expiresIn as ms.StringValue);
@@ -172,54 +174,54 @@ export class AuthService {
       }
     );
   }
-  async generateReauthenticationProof(
-    userId: string,
-    intent: string,
-  ) {
-    // 1. Generate a cryptographically random token.
-    const token = randomBytes(32).toString('hex');
+  // async generateReauthenticationProof(
+  //   userId: string,
+  //   intent: string,
+  // ) {
+  //   // 1. Generate a cryptographically random token.
+  //   const token = randomBytes(32).toString('hex');
 
-    // 2. Hash the token before storing it.
-    const tokenHash = createHash('sha256')
-      .update(token)
-      .digest('hex');
+  //   // 2. Hash the token before storing it.
+  //   const tokenHash = createHash('sha256')
+  //     .update(token)
+  //     .digest('hex');
 
-    // 3. Set a five-minute expiry.
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  //   // 3. Set a five-minute expiry.
+  //   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // 4. Store only the hash.
-    await this.usersService.createReauthenticationProof(
-      userId,
-      intent,
-      tokenHash,
-      expiresAt,
-    );
+  //   // 4. Store only the hash.
+  //   await this.usersService.createReauthenticationProof(
+  //     userId,
+  //     intent,
+  //     tokenHash,
+  //     expiresAt,
+  //   );
 
-    // 5. Return the original token for the HTTP-only cookie.
-    return token;
-  }
-  async verifyReauthenticationProof(
-    userId: string,
-    intent: string,
-    token: string,
-  ) {
-    const tokenHash = createHash('sha256')
-      .update(token)
-      .digest('hex');
+  //   // 5. Return the original token for the HTTP-only cookie.
+  //   return token;
+  // }
+  // async verifyReauthenticationProof(
+  //   userId: string,
+  //   intent: string,
+  //   token: string,
+  // ) {
+  //   const tokenHash = createHash('sha256')
+  //     .update(token)
+  //     .digest('hex');
 
-    const isValid =
-      await this.usersService.consumeReauthenticationProof(
-        userId,
-        intent,
-        tokenHash,
-      );
+  //   const isValid =
+  //     await this.usersService.consumeReauthenticationProof(
+  //       userId,
+  //       intent,
+  //       tokenHash,
+  //     );
 
-    if (!isValid) {
-      throw new UnauthorizedException(
-        'Your Google verification has expired or is invalid. Please verify again.',
-      );
-    }
-  }
+  //   if (!isValid) {
+  //     throw new UnauthorizedException(
+  //       'Your Google verification has expired or is invalid. Please verify again.',
+  //     );
+  //   }
+  // }
   async generateAndSendRecoverToken(
 
     user: SafeUser,
@@ -688,6 +690,9 @@ export class AuthService {
   async isGoogleAccountLinked(userId: string, googleId: string) {
     return this.usersService.isGoogleAccountLinked(userId, googleId);
   }
+  async userHasPassword(userId: string): Promise<boolean> {
+    return this.usersService.hasPassword(userId);
+  }
   async softDeleteUserWithGoogle(userId: string, googleId: string) {
     return this.usersService.softDeleteUserWithGoogle(userId, googleId);
   }
@@ -846,6 +851,23 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User not found');
     }
+    const normalizedNewEmail = newEmail.trim().toLowerCase();
+
+    if (normalizedNewEmail === user.email.toLowerCase()) {
+      throw new BadRequestException(
+        'This is already your current email address.',
+      );
+    }
+
+    const existingUser = await this.usersService.findByEmail(
+      normalizedNewEmail,
+    );
+
+    if (existingUser) {
+      throw new ConflictException(
+        'This email address is already associated with another account.',
+      );
+    }
 
     if (user.password) {
       // Password-based account.
@@ -867,7 +889,7 @@ export class AuthService {
         );
       }
 
-      await this.verifyReauthenticationProof(
+      await this.reauthenticationService.verifyReauthenticationProof(
         user.id,
         'change-email',
         googleProof,
