@@ -1,7 +1,7 @@
 import { GoogleOidcService } from './google/google-oidc.service';
 import * as oidc from 'openid-client';
 import authConfig from 'src/config/auth.config';
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, InternalServerErrorException, Post, Put, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, InternalServerErrorException, Post, Put, Query, Req, Res, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AllowAnonymous } from 'src/decorators/public.decorator';
@@ -106,34 +106,55 @@ export class AuthController {
   async googleLogin(
     @Res({ passthrough: true }) res: Response,
   ) {
-    const {
-      authorizationUrl,
-      state,
-      nonce,
-      codeVerifier,
-      intent,
-    } = await this.googleOidcService.createAuthorizationRequest('login');
+    try {
+      const {
+        authorizationUrl,
+        state,
+        nonce,
+        codeVerifier,
+        intent,
+      } = await this.googleOidcService.createAuthorizationRequest('login');
 
-    const maxAge = 5 * 60 * 1000;
+      const maxAge = 5 * 60 * 1000;
 
-    this.cookieService.setOAuthCookie(
-      res, 'google_oauth_state', state, maxAge,
-    );
+      this.cookieService.setOAuthCookie(
+        res, 'google_oauth_state', state, maxAge,
+      );
 
-    this.cookieService.setOAuthCookie(
-      res, 'google_oauth_nonce', nonce, maxAge,
-    );
+      this.cookieService.setOAuthCookie(
+        res, 'google_oauth_nonce', nonce, maxAge,
+      );
 
-    this.cookieService.setOAuthCookie(
-      res, 'google_oauth_code_verifier', codeVerifier, maxAge,
-    );
+      this.cookieService.setOAuthCookie(
+        res, 'google_oauth_code_verifier', codeVerifier, maxAge,
+      );
 
-    this.cookieService.setOAuthCookie(
-      res, 'google_oauth_intent', intent, maxAge,
-    );
+      this.cookieService.setOAuthCookie(
+        res, 'google_oauth_intent', intent, maxAge,
+      );
 
-    return res.redirect(authorizationUrl.href);
+      return res.redirect(authorizationUrl.href);
+
+    } catch (error) {
+      console.error('Google login initialization failed:', error);
+
+      const errorCode =
+        error instanceof ServiceUnavailableException
+          ? 'google_auth_network_error'
+          : 'google_auth_failed';
+
+      const errorUrl = new URL(
+        'auth/login',
+        this.authConfiguration.frontendUrl,
+      );
+
+      errorUrl.searchParams.set('error', errorCode);
+
+      return res.redirect(errorUrl.toString());
+    }
   }
+
+
 
   @Get('google/reauthenticate')
   async googleReauthenticate(
@@ -459,6 +480,7 @@ export class AuthController {
       }
       else if (intent === 'set-password') {
         const maxAge = 5 * 60 * 1000;
+        // console.log("set-password");
 
         // 1. Ensure the OAuth session belongs to an existing user.
         if (!oauthUserId) {
@@ -570,6 +592,8 @@ export class AuthController {
       }
 
     } catch (error) {
+      // console.log("me");
+
       console.error('Google OAuth callback failed:', error);
       let errorCode = 'google_auth_failed';
       // User cancelled or denied Google authorization.
@@ -579,12 +603,24 @@ export class AuthController {
             ? 'google_access_denied'
             : 'google_auth_failed';
       }
+      else if (error instanceof ServiceUnavailableException) {
+        const response = error.getResponse();
+        // console.log(response);
+
+        const code =
+          typeof response === 'object' && response !== null
+            ? (response as { code?: string }).code
+            : undefined;
+
+        if (code === 'GOOGLE_NETWORK_ERROR') {
+          errorCode = 'google_auth_network_error';
+        }
+      }
 
       // OAuth state or session validation failed.
       else if (error instanceof UnauthorizedException) {
         errorCode = 'google_session_invalid';
       }
-
       // Existing Nestfinity account.
       else if (error instanceof ConflictException) {
         errorCode = 'google_account_exists';
@@ -617,6 +653,7 @@ export class AuthController {
         destination,
         this.authConfiguration.frontendUrl,
       );
+      console.log(errorCode);
 
       errorUrl.searchParams.set('error', errorCode);
       redirectUrl = errorUrl.toString();

@@ -2,6 +2,7 @@
 import {
   Injectable,
   InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
@@ -46,13 +47,18 @@ export class GoogleOidcService {
     } catch (error) {
       // Allow a later request to retry if discovery fails.
       this.configurationPromise = undefined;
-      throw error;
+      throw new ServiceUnavailableException({
+        code:"GOOGLE_NETWORK_ERROR",
+        message:
+          'Unable to connect to Google. Check your internet connection and try again.',
+      });
+
     }
   }
 
 
   async createAuthorizationRequest(
-    intent: 'login'| 'change-email' | 'delete-account' | 'set-password' = 'login',
+    intent: 'login' | 'change-email' | 'delete-account' | 'set-password' = 'login',
   ) {
     const configuration = await this.getConfiguration();
 

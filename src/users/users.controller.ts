@@ -65,6 +65,7 @@ export class UsersController {
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
     const userId = req.user.sub;
+    console.log("set-password");
     const updateData = {
       userName: body.userName,
       password: body.password,
@@ -79,6 +80,8 @@ export class UsersController {
       req,
       'google_reauth_proof',
     );
+    console.log('Google reauth cookie exists:', !!googleProof);
+    console.log('Request cookies:', Object.keys(req.cookies || {}));
     try {
       const result = await this.userService.updateUser(
         userId,
@@ -90,6 +93,8 @@ export class UsersController {
       return result;
       // return this.userService.updateUser(userId, updateData, avatar);
     } catch (error) {
+      console.log(error);
+
       if (
         error instanceof ForbiddenException &&
         error.message.includes('locked')

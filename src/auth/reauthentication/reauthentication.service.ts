@@ -94,7 +94,8 @@ export class ReauthenticationService {
         expiresAt,
       },
     });
-
+    // console.log("reauth reach", token);
+    
     // 5. Return the original token for the HTTP-only cookie.
     return token;
   }

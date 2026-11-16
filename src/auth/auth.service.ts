@@ -95,7 +95,7 @@ export class AuthService {
     email: string;
     emailVerified: boolean;
     picture?: string;
-  }) {
+  }) {    
     const user = await this.usersService.findOrCreateGoogleUser({
       googleId,
       email,
@@ -174,54 +174,7 @@ export class AuthService {
       }
     );
   }
-  // async generateReauthenticationProof(
-  //   userId: string,
-  //   intent: string,
-  // ) {
-  //   // 1. Generate a cryptographically random token.
-  //   const token = randomBytes(32).toString('hex');
-
-  //   // 2. Hash the token before storing it.
-  //   const tokenHash = createHash('sha256')
-  //     .update(token)
-  //     .digest('hex');
-
-  //   // 3. Set a five-minute expiry.
-  //   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-  //   // 4. Store only the hash.
-  //   await this.usersService.createReauthenticationProof(
-  //     userId,
-  //     intent,
-  //     tokenHash,
-  //     expiresAt,
-  //   );
-
-  //   // 5. Return the original token for the HTTP-only cookie.
-  //   return token;
-  // }
-  // async verifyReauthenticationProof(
-  //   userId: string,
-  //   intent: string,
-  //   token: string,
-  // ) {
-  //   const tokenHash = createHash('sha256')
-  //     .update(token)
-  //     .digest('hex');
-
-  //   const isValid =
-  //     await this.usersService.consumeReauthenticationProof(
-  //       userId,
-  //       intent,
-  //       tokenHash,
-  //     );
-
-  //   if (!isValid) {
-  //     throw new UnauthorizedException(
-  //       'Your Google verification has expired or is invalid. Please verify again.',
-  //     );
-  //   }
-  // }
+  
   async generateAndSendRecoverToken(
 
     user: SafeUser,
